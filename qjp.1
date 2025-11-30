@@ -1,0 +1,152 @@
+.TH QJP 1 "November 2024" "qjp" "User Commands"
+.SH NAME
+qjp \- quick json picker, an interactive JSON object selector
+.SH SYNOPSIS
+.B qjp
+.I display-attribute
+.RB [ \-o
+.IR output-attribute ]
+.B <
+.I input.json
+.br
+.B qjp
+.RB [ \-o
+.IR output-attribute ]
+.I display-attribute
+.B <
+.I input.json
+.br
+.B qjp
+.RB [ \-h | \-\-help ]
+.SH DESCRIPTION
+.B qjp
+(quick json picker) is an interactive command-line tool for filtering and selecting JSON objects, similar to
+.BR percol .
+It reads an array of JSON objects from standard input, displays a specified attribute for each object in an interactive list, and outputs the selected object (or a specific attribute) to standard output.
+.PP
+The tool provides real-time filtering as you type, allowing you to quickly narrow down large JSON datasets. Navigation is performed using arrow keys, and selection is made with the Enter key.
+.SH OPTIONS
+.TP
+.I display-attribute
+The JSON attribute to display for each object in the interactive list. This is a required positional argument.
+.TP
+.BR \-o ", " \-\-output-attribute " " \fIattribute\fR
+The JSON attribute to output when an object is selected. If not specified, the entire selected object is output as a single-line JSON string.
+.TP
+.BR \-h ", " \-\-help
+Display usage information and exit.
+.SH KEYBOARD CONTROLS
+.TP
+.B Typing
+Filter the list in real-time. Any printable characters will be added to the filter string.
+.TP
+.BR "Up Arrow" ", " "Down Arrow"
+Navigate through the filtered list.
+.TP
+.B Enter
+Select the current item and output the result.
+.TP
+.B Backspace
+Delete the last character from the filter string.
+.TP
+.BR "Esc" ", " "Ctrl+C"
+Exit without selecting any item.
+.SH EXAMPLES
+Display car models and output the entire selected object:
+.PP
+.nf
+.RS
+cat cars.json | qjp model
+.RE
+.fi
+.PP
+Display car models and output only the ID field:
+.PP
+.nf
+.RS
+cat cars.json | qjp model \-o id
+.RE
+.fi
+.PP
+Display car make and output the price (flags can come first):
+.PP
+.nf
+.RS
+cat cars.json | qjp \-o price make
+.RE
+.fi
+.PP
+Chain with jq for further processing:
+.PP
+.nf
+.RS
+cat cars.json | qjp model | jq '.price'
+.RE
+.fi
+.PP
+Filter and select interactively:
+.PP
+.nf
+.RS
+cat cars.json | qjp model \-o year
+# Start typing "tesla" to show only Tesla models
+.RE
+.fi
+.SH INPUT FORMAT
+.B qjp
+expects a JSON array of objects on standard input. Each object in the array should have the display attribute specified as an argument.
+.PP
+Example input format:
+.PP
+.nf
+.RS
+[
+  {
+    "id": 1,
+    "make": "Toyota",
+    "model": "Camry",
+    "year": 2022
+  },
+  {
+    "id": 2,
+    "make": "Tesla",
+    "model": "Model 3",
+    "year": 2023
+  }
+]
+.RE
+.fi
+.SH OUTPUT FORMAT
+The output format depends on whether the
+.B \-o
+option is used:
+.TP
+.B Without \-o
+The entire selected JSON object is output on a single line.
+.TP
+.B With \-o
+Only the value of the specified attribute is output. Numeric values are output as integers when appropriate (e.g., 42 instead of 42.0).
+.SH EXIT STATUS
+.TP
+.B 0
+An item was successfully selected.
+.TP
+.B 1
+An error occurred (invalid input, missing attribute, etc.) or no item was selected (user pressed Esc or Ctrl+C).
+.SH ENVIRONMENT
+.B qjp
+requires access to
+.I /dev/tty
+for interactive input/output when reading JSON from standard input via pipes.
+.SH SEE ALSO
+.BR jq (1),
+.BR percol (1),
+.BR fzf (1)
+.SH AUTHOR
+Pedro http://github.com/plainas
+.SH BUGS
+Report bugs at: https://github.com/YOUR_USERNAME/qjp/issues
+.SH COPYRIGHT
+Copyright (c) 2024 qjp contributors
+.PP
+Licensed under the MIT License. See LICENSE file for details.

@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "make": "Toyota",
+    "model": "Camry",
+    "year": 2022,
+    "color": "Silver",
+    "price": 28500,
+    "mileage": 15000,
+    "fuel_type": "Gasoline"
+  },
+  {
+    "id": 2,
+    "make": "Tesla",
+    "model": "Model 3",
+    "year": 2023,
+    "color": "White",
+    "price": 42000,
+    "mileage": 5000,
+    "fuel_type": "Electric"
+  },
+  {
+    "id": 3,
+    "make": "Honda",
+    "model": "Civic",
+    "year": 2021,
+    "color": "Blue",
+    "price": 22000,
+    "mileage": 28000,
+    "fuel_type": "Gasoline"
+  },
+  {
+    "id": 4,
+    "make": "Ford",
+    "model": "F-150",
+    "year": 2022,
+    "color": "Black",
+    "price": 45000,
+    "mileage": 12000,
+    "fuel_type": "Gasoline"
+  },
+  {
+    "id": 5,
+    "make": "BMW",
+    "model": "X5",
+    "year": 2023,
+    "color": "Gray",
+    "price": 62000,
+    "mileage": 8000,
+    "fuel_type": "Hybrid"
+  },
+  {
+    "id": 6,
+    "make": "Chevrolet",
+    "model": "Bolt EV",
+    "year": 2022,
+    "color": "Red",
+    "price": 31000,
+    "mileage": 18000,
+    "fuel_type": "Electric"
+  },
+  {
+    "id": 7,
+    "make": "Mazda",
+    "model": "CX-5",
+    "year": 2021,
+    "color": "White",
+    "price": 27000,
+    "mileage": 32000,
+    "fuel_type": "Gasoline"
+  },
+  {
+    "id": 8,
+    "make": "Audi",
+    "model": "A4",
+    "year": 2023,
+    "color": "Black",
+    "price": 48000,
+    "mileage": 3000,
+    "fuel_type": "Gasoline"
+  },
+  {
+    "id": 9,
+    "make": "Hyundai",
+    "model": "Tucson",
+    "year": 2022,
+    "color": "Green",
+    "price": 29000,
+    "mileage": 22000,
+    "fuel_type": "Hybrid"
+  },
+  {
+    "id": 10,
+    "make": "Volkswagen",
+    "model": "ID.4",
+    "year": 2023,
+    "color": "Blue",
+    "price": 41000,
+    "mileage": 6000,
+    "fuel_type": "Electric"
+  }
+]

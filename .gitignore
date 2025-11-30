@@ -1,0 +1,29 @@
+# Binaries
+qjp
+qjp.exe
+qjp-*
+!qjp.1
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Directories
+dist/
+vendor/
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Release artifacts
+checksums.txt
