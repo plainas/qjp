@@ -24,10 +24,6 @@ jobs:
             goarch: amd64
           - goos: darwin
             goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: freebsd
-            goarch: amd64
 
     steps:
       - name: Checkout code
@@ -50,9 +46,6 @@ jobs:
           fi
 
           output_name="qjp-${{ matrix.goos }}-${arch}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            output_name="${output_name}.exe"
-          fi
           go build -ldflags="-s -w" -o "$output_name" .
 
       - name: Upload artifacts

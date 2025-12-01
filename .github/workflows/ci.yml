@@ -28,12 +28,7 @@ jobs:
 
       - name: Verify binary was created
         shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            test -f qjp.exe
-          else
-            test -f qjp
-          fi
+        run: test -f qjp
 
   build-cross-compile:
     name: Cross-compile check
@@ -49,10 +44,6 @@ jobs:
             goarch: amd64
           - goos: darwin
             goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: freebsd
-            goarch: amd64
 
     steps:
       - name: Checkout code
