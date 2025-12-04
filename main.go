@@ -27,67 +27,38 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
-	"unsafe"
+
+	"golang.org/x/term"
 )
 
 const (
 	// ANSI escape codes
-	clearScreen   = "\033[2J"
-	cursorHome    = "\033[H"
-	hideCursor    = "\033[?25l"
-	showCursor    = "\033[?25h"
-	clearLine     = "\033[2K"
-	colorReset    = "\033[0m"
-	colorReverse  = "\033[7m"
-	colorCyan     = "\033[36m"
-	colorGreen    = "\033[32m"
-	altScreenOn   = "\033[?1049h"
-	altScreenOff  = "\033[?1049l"
+	clearScreen  = "\033[2J"
+	cursorHome   = "\033[H"
+	hideCursor   = "\033[?25l"
+	showCursor   = "\033[?25h"
+	clearLine    = "\033[2K"
+	colorReset   = "\033[0m"
+	colorReverse = "\033[7m"
+	colorCyan    = "\033[36m"
+	colorGreen   = "\033[32m"
+	altScreenOn  = "\033[?1049h"
+	altScreenOff = "\033[?1049l"
 )
 
-type termios struct {
-	Iflag  uint32
-	Oflag  uint32
-	Cflag  uint32
-	Lflag  uint32
-	Line   uint8
-	Cc     [32]uint8
-	Ispeed uint32
-	Ospeed uint32
-}
-
-func setRawMode(fd uintptr) (*termios, error) {
-	var oldState termios
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL,
-		fd,
-		syscall.TCGETS,
-		uintptr(unsafe.Pointer(&oldState)))
-	if err != 0 {
+func setRawMode(fd uintptr) (*term.State, error) {
+	oldState, err := term.MakeRaw(int(fd))
+	if err != nil {
 		return nil, err
 	}
-
-	newState := oldState
-	newState.Lflag &^= syscall.ICANON | syscall.ECHO
-	newState.Cc[syscall.VMIN] = 1
-	newState.Cc[syscall.VTIME] = 0
-
-	_, _, err = syscall.Syscall(syscall.SYS_IOCTL,
-		fd,
-		syscall.TCSETS,
-		uintptr(unsafe.Pointer(&newState)))
-	if err != 0 {
-		return nil, err
-	}
-
-	return &oldState, nil
+	return oldState, nil
 }
 
-func restoreTerminal(fd uintptr, oldState *termios) {
-	syscall.Syscall(syscall.SYS_IOCTL,
-		fd,
-		syscall.TCSETS,
-		uintptr(unsafe.Pointer(oldState)))
+func restoreTerminal(fd uintptr, oldState *term.State) {
+	if oldState == nil {
+		return
+	}
+	_ = term.Restore(int(fd), oldState)
 }
 
 func getTerminalSize(tty *os.File) (width, height int, err error) {
@@ -163,7 +134,7 @@ func (a *App) render() {
 	fmt.Fprint(a.tty, clearScreen+cursorHome)
 
 	// Display filter
-	fmt.Fprintf(a.tty, "%sFilter:%s %s\n", colorCyan, colorReset, a.filter)
+	fmt.Fprintf(a.tty, "%sFilter:%s %s\r\n", colorCyan, colorReset, a.filter)
 
 	// Calculate visible window
 	visibleLines := a.height - 4
@@ -189,14 +160,14 @@ func (a *App) render() {
 		}
 
 		if i == a.cursor {
-			fmt.Fprintf(a.tty, "%s> %s%s\n", colorReverse, displayVal, colorReset)
+			fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, displayVal, colorReset)
 		} else {
-			fmt.Fprintf(a.tty, "  %s\n", displayVal)
+			fmt.Fprintf(a.tty, "  %s\r\n", displayVal)
 		}
 	}
 
 	if len(a.filtered) == 0 {
-		fmt.Fprintln(a.tty, "  (no matches)")
+		fmt.Fprint(a.tty, "  (no matches)\r\n")
 	}
 }
 
