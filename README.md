@@ -17,12 +17,6 @@ Type to filter, use arrow keys to navigate, and press Enter to output your selec
 
 ### Download Pre-built Binaries
 
-Supported platforms:
-- Linux (amd64, arm64, arm)
-- macOS (amd64, arm64)
-- Windows (amd64)
-- FreeBSD (amd64)
-
 Download the binary directly for your platform from the [Releases](https://github.com/plainas/qjp/releases) page.
 
 #### Linux
@@ -53,13 +47,6 @@ chmod +x qjp
 sudo mv qjp /usr/local/bin/
 ```
 
-#### Windows
-
-```powershell
-# Download from browser or use PowerShell:
-Invoke-WebRequest -Uri "https://github.com/plainas/qjp/releases/latest/download/qjp-windows-x86_64.exe" -OutFile "qjp.exe"
-# Then move qjp.exe to a directory in your PATH
-```
 
 ### Build from Source
 
