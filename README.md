@@ -74,6 +74,7 @@ man qjp
 
 ## Examples
 
+All examples bellow use the sample `cars.json` file as an example.
 ```bash
 # Display car models and output the entire selected object
 # This will show you a list of car models. When you select one, it outputs the entire JSON object on a single line.
