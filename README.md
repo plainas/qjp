@@ -19,32 +19,29 @@ Type to filter, use arrow keys to navigate, and press Enter to output your selec
 
 Download the binary directly for your platform from the [Releases](https://github.com/plainas/qjp/releases) page.
 
-#### Linux
 
-```bash
-# For Linux amd64:
-curl -L -o qjp https://github.com/plainas/qjp/releases/latest/download/qjp-linux-x86_64
-chmod +x qjp
-sudo mv qjp /usr/local/bin/
+#### Quick install scripts
+```sh
+# Linux (x86_64)
+sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-x86_64"
+sudo chmod +x /usr/local/bin/qjp
 
-# For Linux arm64:
-curl -L -o qjp https://github.com/plainas/qjp/releases/latest/download/qjp-linux-arm64
-chmod +x qjp
-sudo mv qjp /usr/local/bin/
-```
+# Linux (ARM64 / aarch64)
+sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-arm64"
+sudo chmod +x /usr/local/bin/qjp
 
-#### macOS
+# Linux (ARMv7)
+sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-armv7"
+sudo chmod +x /usr/local/bin/qjp
 
-```bash
-# For macOS amd64 (Intel):
-curl -L -o qjp https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-x86_64
-chmod +x qjp
-sudo mv qjp /usr/local/bin/
+# macOS (Intel)
+sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-x86_64"
+sudo chmod +x /usr/local/bin/qjp
 
-# For macOS arm64 (Apple Silicon):
-curl -L -o qjp https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-arm64
-chmod +x qjp
-sudo mv qjp /usr/local/bin/
+
+# macOS (Apple Silicon)
+sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-arm64"
+sudo chmod +x /usr/local/bin/qjp
 ```
 
 
