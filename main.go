@@ -116,11 +116,20 @@ func (a *App) updateFilter() {
 
 	a.filtered = []int{}
 	for i, obj := range a.objects {
-		if val, ok := obj[a.displayAttr]; ok {
-			displayVal := fmt.Sprintf("%v", val)
-			if strings.Contains(strings.ToLower(displayVal), filterText) {
-				a.filtered = append(a.filtered, i)
+		var displayVal string
+		if a.displayAttr == "" {
+			// Filter based on entire JSON representation
+			jsonBytes, err := json.Marshal(obj)
+			if err == nil {
+				displayVal = string(jsonBytes)
 			}
+		} else {
+			if val, ok := obj[a.displayAttr]; ok {
+				displayVal = fmt.Sprintf("%v", val)
+			}
+		}
+		if strings.Contains(strings.ToLower(displayVal), filterText) {
+			a.filtered = append(a.filtered, i)
 		}
 	}
 
@@ -155,8 +164,16 @@ func (a *App) render() {
 		obj := a.objects[idx]
 
 		displayVal := ""
-		if val, ok := obj[a.displayAttr]; ok {
-			displayVal = fmt.Sprintf("%v", val)
+		if a.displayAttr == "" {
+			// Display entire object as JSON on one line
+			jsonBytes, err := json.Marshal(obj)
+			if err == nil {
+				displayVal = string(jsonBytes)
+			}
+		} else {
+			if val, ok := obj[a.displayAttr]; ok {
+				displayVal = fmt.Sprintf("%v", val)
+			}
 		}
 
 		if i == a.cursor {
@@ -246,10 +263,13 @@ func min(a, b int) int {
 }
 
 func output_usage_message_to_stderr() {
-	fmt.Fprintln(os.Stderr, "Usage: qjp <display-attribute> [-o output-attribute] < input.json")
-	fmt.Fprintln(os.Stderr, "       qjp [-o output-attribute] <display-attribute> < input.json")
+	fmt.Fprintln(os.Stderr, "Usage: qjp [display-attribute] [-o output-attribute] < input.json")
+	fmt.Fprintln(os.Stderr, "       qjp [-o output-attribute] [display-attribute] < input.json")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp model")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp model -o id")
 }
@@ -272,10 +292,7 @@ func main() {
 		}
 	}
 
-	if displayAttr == "" {
-		output_usage_message_to_stderr()
-		os.Exit(1)
-	}
+	// displayAttr is optional - if not provided, display whole object
 
 	// Read JSON from stdin
 	input, err := io.ReadAll(os.Stdin)

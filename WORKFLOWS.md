@@ -18,8 +18,6 @@ This project includes three GitHub Actions workflows for automated building, tes
 **Platforms tested**:
 - Linux: amd64, arm64
 - macOS: amd64, arm64
-- Windows: amd64
-- FreeBSD: amd64
 
 ### 2. Release Workflow (`release.yml`)
 
@@ -34,7 +32,7 @@ This project includes three GitHub Actions workflows for automated building, tes
 - Uploads raw binaries directly (no archives)
 - Creates a GitHub release with all binaries attached
 
-**Release naming**: `qjp-{os}-{arch}` (or `.exe` for Windows)
+**Release naming**: `qjp-{os}-{arch}`
 
 ### 3. GoReleaser Workflow (`goreleaser.yml`) - **RECOMMENDED**
 
@@ -130,7 +128,5 @@ strategy:
 
 - **Linux**: amd64, arm64, arm (armv7)
 - **macOS**: amd64 (Intel), arm64 (Apple Silicon)
-- **Windows**: amd64
-- **FreeBSD**: amd64
 
 All binaries are statically compiled with `CGO_ENABLED=0` for maximum portability.
