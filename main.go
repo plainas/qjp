@@ -75,20 +75,21 @@ func getTerminalSize(tty *os.File) (width, height int, err error) {
 }
 
 type App struct {
-	objects     []map[string]interface{}
-	displayAttr string
-	outputAttr  string
-	cursor      int
-	filtered    []int
-	filter      string
-	width       int
-	height      int
-	tty         *os.File
-	truncate    bool
-	selected    map[int]bool
+	objects      []map[string]interface{}
+	displayAttrs []string
+	outputAttr   string
+	cursor       int
+	filtered     []int
+	filter       string
+	width        int
+	height       int
+	tty          *os.File
+	truncate     bool
+	selected     map[int]bool
+	separator    string
 }
 
-func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tty *os.File, truncate bool) *App {
+func newApp(objects []map[string]interface{}, displayAttrs []string, outputAttr string, tty *os.File, truncate bool, separator string) *App {
 	width, height, _ := getTerminalSize(tty)
 	filtered := make([]int, len(objects))
 	for i := range objects {
@@ -96,17 +97,18 @@ func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tt
 	}
 
 	return &App{
-		objects:     objects,
-		displayAttr: displayAttr,
-		outputAttr:  outputAttr,
-		cursor:      0,
-		filtered:    filtered,
-		filter:      "",
-		width:       width,
-		height:      height,
-		tty:         tty,
-		truncate:    truncate,
-		selected:    make(map[int]bool),
+		objects:      objects,
+		displayAttrs: displayAttrs,
+		outputAttr:   outputAttr,
+		cursor:       0,
+		filtered:     filtered,
+		filter:       "",
+		width:        width,
+		height:       height,
+		tty:          tty,
+		truncate:     truncate,
+		selected:     make(map[int]bool),
+		separator:    separator,
 	}
 }
 
@@ -135,7 +137,7 @@ func (a *App) updateFilter() {
 }
 
 func (a *App) getDisplayValue(obj map[string]interface{}) string {
-	if a.displayAttr == "" {
+	if len(a.displayAttrs) == 0 {
 		// Display entire object as JSON on one line
 		jsonBytes, err := json.Marshal(obj)
 		if err == nil {
@@ -143,10 +145,20 @@ func (a *App) getDisplayValue(obj map[string]interface{}) string {
 		}
 		return ""
 	}
-	if val, ok := obj[a.displayAttr]; ok {
-		return fmt.Sprintf("%v", val)
+
+	// Get values for each display attribute
+	values := []string{}
+	for _, attr := range a.displayAttrs {
+		if val, ok := obj[attr]; ok {
+			values = append(values, fmt.Sprintf("%v", val))
+		}
 	}
-	return ""
+
+	if len(values) == 0 {
+		return ""
+	}
+
+	return strings.Join(values, a.separator)
 }
 
 func (a *App) calculateLines(displayVal string) int {
@@ -352,15 +364,16 @@ func min(a, b int) int {
 }
 
 func output_usage_message_to_stderr() {
-	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-t]")
-	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-t] < input.json")
+	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t]")
+	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] < input.json")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Input can be provided via stdin or filename, but not both.")
 	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Options:")
-	fmt.Fprintln(os.Stderr, "  -d <attr>  Display specific attribute in list")
+	fmt.Fprintln(os.Stderr, "  -d <attr>  Display specific attribute in list (can be used multiple times)")
 	fmt.Fprintln(os.Stderr, "  -o <attr>  Output specific attribute from selected object(s)")
+	fmt.Fprintln(os.Stderr, "  -s <sep>   Separator for multiple display attributes (default: \" - \")")
 	fmt.Fprintln(os.Stderr, "  -t         Truncate long lines instead of wrapping")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Controls:")
@@ -372,6 +385,8 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model")
+	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year")
+	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year -s \" | \"")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -o id")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp -d model -t")
 }
@@ -379,17 +394,21 @@ func output_usage_message_to_stderr() {
 func main() {
 	// Manual parsing to support flags after positional arguments
 	var outputAttr string
-	var displayAttr string
+	var displayAttrs []string
 	var truncate bool
 	var filename string
+	var separator string = " - " // Default separator
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-d" && i+1 < len(args) {
-			displayAttr = args[i+1]
+			displayAttrs = append(displayAttrs, args[i+1])
 			i++ // skip the next arg
 		} else if args[i] == "-o" && i+1 < len(args) {
 			outputAttr = args[i+1]
+			i++ // skip the next arg
+		} else if args[i] == "-s" && i+1 < len(args) {
+			separator = args[i+1]
 			i++ // skip the next arg
 		} else if args[i] == "-t" {
 			truncate = true
@@ -401,7 +420,7 @@ func main() {
 		}
 	}
 
-	// displayAttr is optional - if not provided, display whole object
+	// displayAttrs is optional - if not provided, display whole object
 
 	// Check if stdin has data
 	stdinStat, _ := os.Stdin.Stat()
@@ -457,7 +476,7 @@ func main() {
 	}
 	defer tty.Close()
 
-	app := newApp(objects, displayAttr, outputAttr, tty, truncate)
+	app := newApp(objects, displayAttrs, outputAttr, tty, truncate, separator)
 	selectedIndices, err := app.run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
