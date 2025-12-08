@@ -26,6 +26,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"golang.org/x/term"
@@ -33,17 +34,18 @@ import (
 
 const (
 	// ANSI escape codes
-	clearScreen  = "\033[2J"
-	cursorHome   = "\033[H"
-	hideCursor   = "\033[?25l"
-	showCursor   = "\033[?25h"
-	clearLine    = "\033[2K"
-	colorReset   = "\033[0m"
-	colorReverse = "\033[7m"
-	colorCyan    = "\033[36m"
-	colorGreen   = "\033[32m"
-	altScreenOn  = "\033[?1049h"
-	altScreenOff = "\033[?1049l"
+	clearScreen    = "\033[2J"
+	cursorHome     = "\033[H"
+	hideCursor     = "\033[?25l"
+	showCursor     = "\033[?25h"
+	clearLine      = "\033[2K"
+	colorReset     = "\033[0m"
+	colorReverse   = "\033[7m"
+	colorCyan      = "\033[36m"
+	colorGreen     = "\033[32m"
+	colorSelected  = "\033[42m" // Green background for selected
+	altScreenOn    = "\033[?1049h"
+	altScreenOff   = "\033[?1049l"
 )
 
 func setRawMode(fd uintptr) (*term.State, error) {
@@ -83,6 +85,7 @@ type App struct {
 	height      int
 	tty         *os.File
 	truncate    bool
+	selected    map[int]bool
 }
 
 func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tty *os.File, truncate bool) *App {
@@ -103,6 +106,7 @@ func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tt
 		height:      height,
 		tty:         tty,
 		truncate:    truncate,
+		selected:    make(map[int]bool),
 	}
 }
 
@@ -233,10 +237,19 @@ func (a *App) render() {
 			}
 		}
 
+		isSelected := a.selected[idx]
 		if i == a.cursor {
-			fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, displayVal, colorReset)
+			if isSelected {
+				fmt.Fprintf(a.tty, "%s%s> %s%s\r\n", colorReverse, colorSelected, displayVal, colorReset)
+			} else {
+				fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, displayVal, colorReset)
+			}
 		} else {
-			fmt.Fprintf(a.tty, "  %s\r\n", displayVal)
+			if isSelected {
+				fmt.Fprintf(a.tty, "%s  %s%s\r\n", colorSelected, displayVal, colorReset)
+			} else {
+				fmt.Fprintf(a.tty, "  %s\r\n", displayVal)
+			}
 		}
 	}
 
@@ -245,11 +258,11 @@ func (a *App) render() {
 	}
 }
 
-func (a *App) run() (int, error) {
+func (a *App) run() ([]int, error) {
 	ttyFd := a.tty.Fd()
 	oldState, err := setRawMode(ttyFd)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 	defer restoreTerminal(ttyFd, oldState)
 
@@ -263,16 +276,35 @@ func (a *App) run() (int, error) {
 	for {
 		n, err := a.tty.Read(buf)
 		if err != nil {
-			return -1, err
+			return nil, err
 		}
 
 		if n == 1 {
 			switch buf[0] {
+			case 0: // Ctrl+Space
+				if len(a.filtered) > 0 && a.cursor < len(a.filtered) {
+					idx := a.filtered[a.cursor]
+					a.selected[idx] = !a.selected[idx]
+					// Move cursor down after toggling
+					if a.cursor < len(a.filtered)-1 {
+						a.cursor++
+					}
+					a.render()
+				}
 			case 3, 27: // Ctrl+C or ESC
-				return -1, nil
+				return nil, nil
 			case 10, 13: // Enter (newline or carriage return)
 				if len(a.filtered) > 0 && a.cursor < len(a.filtered) {
-					return a.filtered[a.cursor], nil
+					// Return selected items if any, otherwise just the cursor item
+					if len(a.selected) > 0 {
+						result := []int{}
+						for idx := range a.selected {
+							result = append(result, idx)
+						}
+						sort.Ints(result) // Sort for consistent order
+						return result, nil
+					}
+					return []int{a.filtered[a.cursor]}, nil
 				}
 			case 127: // Backspace
 				if len(a.filter) > 0 {
@@ -326,8 +358,14 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Options:")
-	fmt.Fprintln(os.Stderr, "  -o <attr>  Output specific attribute from selected object")
+	fmt.Fprintln(os.Stderr, "  -o <attr>  Output specific attribute from selected object(s)")
 	fmt.Fprintln(os.Stderr, "  -t         Truncate long lines instead of wrapping")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Controls:")
+	fmt.Fprintln(os.Stderr, "  Arrow Keys    Navigate up/down")
+	fmt.Fprintln(os.Stderr, "  Ctrl+Space    Toggle selection (multi-select)")
+	fmt.Fprintln(os.Stderr, "  Enter         Confirm selection")
+	fmt.Fprintln(os.Stderr, "  ESC/Ctrl+C    Cancel")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp")
@@ -386,44 +424,46 @@ func main() {
 	defer tty.Close()
 
 	app := newApp(objects, displayAttr, outputAttr, tty, truncate)
-	selectedIdx, err := app.run()
+	selectedIndices, err := app.run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if selectedIdx >= 0 {
-		selectedObj := app.objects[selectedIdx]
+	if len(selectedIndices) > 0 {
+		for _, idx := range selectedIndices {
+			selectedObj := app.objects[idx]
 
-		if outputAttr != "" {
-			// Output specific attribute
-			if val, ok := selectedObj[outputAttr]; ok {
-				// Format output based on type
-				switch v := val.(type) {
-				case float64:
-					// Check if it's actually an integer
-					if v == float64(int64(v)) {
-						fmt.Println(int64(v))
-					} else {
+			if outputAttr != "" {
+				// Output specific attribute
+				if val, ok := selectedObj[outputAttr]; ok {
+					// Format output based on type
+					switch v := val.(type) {
+					case float64:
+						// Check if it's actually an integer
+						if v == float64(int64(v)) {
+							fmt.Println(int64(v))
+						} else {
+							fmt.Println(v)
+						}
+					case string:
+						fmt.Println(v)
+					default:
 						fmt.Println(v)
 					}
-				case string:
-					fmt.Println(v)
-				default:
-					fmt.Println(v)
+				} else {
+					fmt.Fprintf(os.Stderr, "Attribute '%s' not found in selected object\n", outputAttr)
+					os.Exit(1)
 				}
 			} else {
-				fmt.Fprintf(os.Stderr, "Attribute '%s' not found in selected object\n", outputAttr)
-				os.Exit(1)
+				// Output entire object on one line
+				jsonBytes, err := json.Marshal(selectedObj)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error marshaling output: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Println(string(jsonBytes))
 			}
-		} else {
-			// Output entire object on one line
-			jsonBytes, err := json.Marshal(selectedObj)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error marshaling output: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Println(string(jsonBytes))
 		}
 	}
 }
