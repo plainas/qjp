@@ -82,9 +82,10 @@ type App struct {
 	width       int
 	height      int
 	tty         *os.File
+	truncate    bool
 }
 
-func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tty *os.File) *App {
+func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tty *os.File, truncate bool) *App {
 	width, height, _ := getTerminalSize(tty)
 	filtered := make([]int, len(objects))
 	for i := range objects {
@@ -101,6 +102,7 @@ func newApp(objects []map[string]interface{}, displayAttr, outputAttr string, tt
 		width:       width,
 		height:      height,
 		tty:         tty,
+		truncate:    truncate,
 	}
 }
 
@@ -116,18 +118,7 @@ func (a *App) updateFilter() {
 
 	a.filtered = []int{}
 	for i, obj := range a.objects {
-		var displayVal string
-		if a.displayAttr == "" {
-			// Filter based on entire JSON representation
-			jsonBytes, err := json.Marshal(obj)
-			if err == nil {
-				displayVal = string(jsonBytes)
-			}
-		} else {
-			if val, ok := obj[a.displayAttr]; ok {
-				displayVal = fmt.Sprintf("%v", val)
-			}
-		}
+		displayVal := a.getDisplayValue(obj)
 		if strings.Contains(strings.ToLower(displayVal), filterText) {
 			a.filtered = append(a.filtered, i)
 		}
@@ -139,22 +130,92 @@ func (a *App) updateFilter() {
 	}
 }
 
+func (a *App) getDisplayValue(obj map[string]interface{}) string {
+	if a.displayAttr == "" {
+		// Display entire object as JSON on one line
+		jsonBytes, err := json.Marshal(obj)
+		if err == nil {
+			return string(jsonBytes)
+		}
+		return ""
+	}
+	if val, ok := obj[a.displayAttr]; ok {
+		return fmt.Sprintf("%v", val)
+	}
+	return ""
+}
+
+func (a *App) calculateLines(displayVal string) int {
+	if displayVal == "" {
+		return 1
+	}
+	if a.truncate {
+		return 1
+	}
+	// Account for "> " or "  " prefix (2 chars)
+	effectiveWidth := a.width - 2
+	if effectiveWidth <= 0 {
+		return 1
+	}
+	lines := (len(displayVal) + effectiveWidth - 1) / effectiveWidth
+	if lines == 0 {
+		return 1
+	}
+	return lines
+}
+
 func (a *App) render() {
 	fmt.Fprint(a.tty, clearScreen+cursorHome)
 
 	// Display filter
 	fmt.Fprintf(a.tty, "%sFilter:%s %s\r\n", colorCyan, colorReset, a.filter)
 
-	// Calculate visible window
-	visibleLines := a.height - 4
+	// Calculate visible window based on actual line usage
+	availableLines := a.height - 4
+	if availableLines <= 0 {
+		availableLines = 1
+	}
+
+	// Find the range of items to display
 	start := 0
 	end := len(a.filtered)
 
-	if visibleLines > 0 && len(a.filtered) > visibleLines {
-		start = max(0, a.cursor-visibleLines/2)
-		end = min(len(a.filtered), start+visibleLines)
-		if end-start < visibleLines {
-			start = max(0, end-visibleLines)
+	if len(a.filtered) > 0 {
+		// First, try to center cursor in viewport
+		usedLines := 0
+		start = a.cursor
+
+		// Expand upward from cursor
+		for start > 0 {
+			idx := a.filtered[start-1]
+			obj := a.objects[idx]
+			displayVal := a.getDisplayValue(obj)
+			itemLines := a.calculateLines(displayVal)
+			if usedLines+itemLines > availableLines/2 {
+				break
+			}
+			start--
+			usedLines += itemLines
+		}
+
+		// Add cursor item
+		idx := a.filtered[a.cursor]
+		obj := a.objects[idx]
+		displayVal := a.getDisplayValue(obj)
+		usedLines += a.calculateLines(displayVal)
+
+		// Expand downward from cursor
+		end = a.cursor + 1
+		for end < len(a.filtered) {
+			idx := a.filtered[end]
+			obj := a.objects[idx]
+			displayVal := a.getDisplayValue(obj)
+			itemLines := a.calculateLines(displayVal)
+			if usedLines+itemLines > availableLines {
+				break
+			}
+			usedLines += itemLines
+			end++
 		}
 	}
 
@@ -162,17 +223,13 @@ func (a *App) render() {
 	for i := start; i < end; i++ {
 		idx := a.filtered[i]
 		obj := a.objects[idx]
+		displayVal := a.getDisplayValue(obj)
 
-		displayVal := ""
-		if a.displayAttr == "" {
-			// Display entire object as JSON on one line
-			jsonBytes, err := json.Marshal(obj)
-			if err == nil {
-				displayVal = string(jsonBytes)
-			}
-		} else {
-			if val, ok := obj[a.displayAttr]; ok {
-				displayVal = fmt.Sprintf("%v", val)
+		// Truncate if needed
+		if a.truncate {
+			maxWidth := a.width - 2 // Account for "> " or "  " prefix
+			if len(displayVal) > maxWidth && maxWidth > 3 {
+				displayVal = displayVal[:maxWidth-3] + "..."
 			}
 		}
 
@@ -263,27 +320,35 @@ func min(a, b int) int {
 }
 
 func output_usage_message_to_stderr() {
-	fmt.Fprintln(os.Stderr, "Usage: qjp [display-attribute] [-o output-attribute] < input.json")
-	fmt.Fprintln(os.Stderr, "       qjp [-o output-attribute] [display-attribute] < input.json")
+	fmt.Fprintln(os.Stderr, "Usage: qjp [display-attribute] [-o output-attribute] [-t] < input.json")
+	fmt.Fprintln(os.Stderr, "       qjp [-o output-attribute] [-t] [display-attribute] < input.json")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Options:")
+	fmt.Fprintln(os.Stderr, "  -o <attr>  Output specific attribute from selected object")
+	fmt.Fprintln(os.Stderr, "  -t         Truncate long lines instead of wrapping")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp model")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp model -o id")
+	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp -t")
 }
 
 func main() {
 	// Manual parsing to support flags after positional arguments
 	var outputAttr string
 	var displayAttr string
+	var truncate bool
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-o" && i+1 < len(args) {
 			outputAttr = args[i+1]
 			i++ // skip the next arg
+		} else if args[i] == "-t" {
+			truncate = true
 		} else if args[i] == "-h" || args[i] == "--help" {
 			output_usage_message_to_stderr()
 			os.Exit(0)
@@ -320,7 +385,7 @@ func main() {
 	}
 	defer tty.Close()
 
-	app := newApp(objects, displayAttr, outputAttr, tty)
+	app := newApp(objects, displayAttr, outputAttr, tty, truncate)
 	selectedIdx, err := app.run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
