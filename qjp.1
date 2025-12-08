@@ -1,18 +1,25 @@
-.TH QJP 1 "November 2024" "qjp" "User Commands"
+.TH QJP 1 "December 2024" "qjp" "User Commands"
 .SH NAME
 qjp \- quick json picker, an interactive JSON object selector
 .SH SYNOPSIS
 .B qjp
-.I display-attribute
+.RI [ filename ]
+.RB [ \-d
+.IR display-attribute ]
 .RB [ \-o
 .IR output-attribute ]
-.B <
-.I input.json
+.RB [ \-s
+.IR separator ]
+.RB [ \-t ]
 .br
 .B qjp
+.RB [ \-d
+.IR display-attribute ]
 .RB [ \-o
 .IR output-attribute ]
-.I display-attribute
+.RB [ \-s
+.IR separator ]
+.RB [ \-t ]
 .B <
 .I input.json
 .br
@@ -21,17 +28,28 @@ qjp \- quick json picker, an interactive JSON object selector
 .SH DESCRIPTION
 .B qjp
 (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects, similar to
-.BR percol .
-It reads an array of JSON objects from standard input, displays a specified attribute for each object in an interactive list, and outputs the selected object (or a specific attribute) to standard output.
+.BR percol " and " fzf .
+It reads an array of JSON objects from a file or standard input, displays specified attribute(s) for each object in an interactive list, and outputs the selected object(s) (or specific attributes) to standard output.
 .PP
-The tool provides real-time filtering as you type, allowing you to quickly narrow down large JSON datasets. Navigation is performed using arrow keys, and selection is made with the Enter key.
+The tool provides real-time filtering as you type, allowing you to quickly narrow down large JSON datasets. Navigation is performed using arrow keys, multi-selection with Ctrl+Space, and final selection with the Enter key. Selected items are highlighted with a green background.
 .SH OPTIONS
 .TP
-.I display-attribute
-The JSON attribute to display for each object in the interactive list. This is a required positional argument.
+.I filename
+Optional positional argument specifying the JSON file to read. If not provided, reads from standard input. Cannot be used together with stdin input.
 .TP
-.BR \-o ", " \-\-output-attribute " " \fIattribute\fR
-The JSON attribute to output when an object is selected. If not specified, the entire selected object is output as a single-line JSON string.
+.BR \-d ", " " " \fIdisplay-attribute\fR
+The JSON attribute to display for each object in the interactive list. Can be specified multiple times to display multiple attributes separated by the separator string. If not specified, the entire object is displayed as JSON.
+.TP
+.BR \-o ", " " " \fIoutput-attribute\fR
+The JSON attribute to output when object(s) are selected. If not specified, the entire selected object(s) are output as single-line JSON strings.
+.TP
+.BR \-s ", " " " \fIseparator\fR
+Separator string to use when displaying multiple attributes (specified with multiple
+.B \-d
+flags). Default is " \- " (space, dash, space).
+.TP
+.BR \-t
+Truncate long lines instead of wrapping them. Useful for very long content to keep each item on a single line.
 .TP
 .BR \-h ", " \-\-help
 Display usage information and exit.
@@ -43,8 +61,11 @@ Filter the list in real-time. Any printable characters will be added to the filt
 .BR "Up Arrow" ", " "Down Arrow"
 Navigate through the filtered list.
 .TP
+.B Ctrl+Space
+Toggle selection of the current item (multi-select mode). Selected items are highlighted with a green background. After toggling, the cursor moves to the next item.
+.TP
 .B Enter
-Select the current item and output the result.
+Confirm selection and output the result. If items were selected with Ctrl+Space, all selected items are output (one per line). Otherwise, the current cursor item is output.
 .TP
 .B Backspace
 Delete the last character from the filter string.
@@ -52,11 +73,19 @@ Delete the last character from the filter string.
 .BR "Esc" ", " "Ctrl+C"
 Exit without selecting any item.
 .SH EXAMPLES
-Display car models and output the entire selected object:
+Read from file and display entire objects:
 .PP
 .nf
 .RS
-cat cars.json | qjp model
+qjp cars.json
+.RE
+.fi
+.PP
+Read from file and display car models:
+.PP
+.nf
+.RS
+qjp cars.json \-d model
 .RE
 .fi
 .PP
@@ -64,15 +93,39 @@ Display car models and output only the ID field:
 .PP
 .nf
 .RS
-cat cars.json | qjp model \-o id
+qjp cars.json \-d model \-o id
 .RE
 .fi
 .PP
-Display car make and output the price (flags can come first):
+Display multiple attributes (model and year) with default separator:
 .PP
 .nf
 .RS
-cat cars.json | qjp \-o price make
+qjp cars.json \-d model \-d year
+.RE
+.fi
+.PP
+Display multiple attributes with custom separator:
+.PP
+.nf
+.RS
+qjp cars.json \-d model \-d year \-s " | "
+.RE
+.fi
+.PP
+Use truncation for long lines:
+.PP
+.nf
+.RS
+qjp cars.json \-t
+.RE
+.fi
+.PP
+Read from stdin (traditional pipe usage):
+.PP
+.nf
+.RS
+cat cars.json | qjp \-d model
 .RE
 .fi
 .PP
@@ -80,16 +133,16 @@ Chain with jq for further processing:
 .PP
 .nf
 .RS
-cat cars.json | qjp model | jq '.price'
+qjp cars.json \-d model | jq '.price'
 .RE
 .fi
 .PP
-Filter and select interactively:
+Multi-select example (use Ctrl+Space to select items, then Enter):
 .PP
 .nf
 .RS
-cat cars.json | qjp model \-o year
-# Start typing "tesla" to show only Tesla models
+qjp cars.json \-d model \-o id
+# Use Ctrl+Space to select multiple cars, press Enter to output all IDs
 .RE
 .fi
 .SH INPUT FORMAT
@@ -119,13 +172,16 @@ Example input format:
 .SH OUTPUT FORMAT
 The output format depends on whether the
 .B \-o
-option is used:
+option is used and whether multiple items are selected:
 .TP
 .B Without \-o
-The entire selected JSON object is output on a single line.
+The entire selected JSON object(s) are output, one per line. Each object is formatted as a single-line JSON string.
 .TP
 .B With \-o
-Only the value of the specified attribute is output. Numeric values are output as integers when appropriate (e.g., 42 instead of 42.0).
+Only the value of the specified attribute is output for each selected object, one per line. Numeric values are output as integers when appropriate (e.g., 42 instead of 42.0).
+.TP
+.B Multi-select
+When multiple items are selected using Ctrl+Space, all selected items are output in order (sorted by their original index), one per line.
 .SH EXIT STATUS
 .TP
 .B 0
@@ -144,6 +200,16 @@ for interactive input/output when reading JSON from standard input via pipes.
 .BR fzf (1)
 .SH AUTHOR
 Pedro http://github.com/plainas
+.SH NOTES
+When displaying multiple attributes with
+.BR \-d ,
+only objects that have
+.I all
+specified attributes will show all values. If an object is missing one of the attributes, that value will be omitted from the display string.
+.PP
+Line wrapping calculations account for terminal width. Long content will wrap naturally unless
+.B \-t
+is used to truncate lines.
 .SH COPYRIGHT
 Copyright (c) Pedro 2025
 .PP

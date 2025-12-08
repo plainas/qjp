@@ -1,17 +1,23 @@
 # qjp
 
-`qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscript.
+`qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
 
-Feed it a JSON array via stdin, specify which field to display, and qjp will present an interactive list.
-Type to filter, use arrow keys to navigate, and press Enter to output your selection - either as a complete JSON object or just a specific field value.
+Feed it a JSON array via stdin or from a file, optionally specify which field(s) to display, and qjp will present an interactive list.
+Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, and press Enter to output your selection - either as complete JSON objects or just specific field values.
 
 ## Features
 
 - Interactive filtering and selection of JSON objects
-- Display a specific attribute while browsing
-- Output the entire selected object or a specific attribute
-- Real-time filtering as you type
 - Navigate with arrow keys
+- Multi-select support with Ctrl+Space
+- Ctrl+C or ESC to exit without selecting anything
+- Read from stdin or directly from a file
+- Display one or multiple attributes while browsing
+- Customizable display separator for multiple attributes
+- Optional line truncation for long content
+- Output the entire selected object(s) or a specific attribute
+- Real-time filtering as you type
+
 
 ## Installation
 
@@ -44,26 +50,37 @@ sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/
 sudo chmod +x /usr/local/bin/qjp
 ```
 
+#### Install the manpage on your system (optional)
+
+```bash
+sudo wget -O /usr/local/share/man/man1/qjp.1 "https://github.com/plainas/qjp/releases/latest/download/qjp.1"
+sudo mandb
+```
+
 
 ### Build from Source
 
 ```bash
-# Build only
 go build -o qjp
 ```
-
 
 ## Usage
 
 ```
-qjp <display-attribute> [-o output-attribute] < input.json
-
-# Arguments
-
-  - `<display-attribute>`: (required) The attribute to display for each object while browsing
-  - `-o <output-attribute>`: (optional)The attribute to output when an object is selected.
-    If output-attribute is not provided, the whole selected object will be output.
+qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t]
+qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] < input.json
 ```
+
+### Arguments
+
+- `filename`: (optional) JSON file to read. If not provided, reads from stdin.
+- `-d <attribute>`: Display specific attribute(s) in list (can be used multiple times for multiple attributes)
+- `-o <attribute>`: Output specific attribute from selected object(s)
+- `-s <separator>`: Separator for multiple display attributes (default: " - ")
+- `-t`: Truncate long lines instead of wrapping
+- `-h, --help`: Show help message
+
+**Note:** Input can be provided via stdin or filename, but not both.
 
 For detailed usage information, see the man page:
 ```bash
@@ -74,27 +91,96 @@ man qjp
 
 ## Examples
 
-All examples bellow use the sample `cars.json` file as an example.
+Basic example below use the sample `cars.json` included in the source.
+
+
 ```bash
-# Display car models and output the entire selected object
-# This will show you a list of car models. When you select one, it outputs the entire JSON object on a single line.
-cat cars.json | ./qjp model
+##############################################################
+## Basic usage
+##############################################################
+
+# Read from file and display entire objects.
+# Outputs entire objects one per line
+qjp cars.json
+
+# Read from file and display only car models name when selecting
+qjp cars.json -d model
 
 # Display car models and output only the ID
-# This will show you a list of car models. When you select one, it outputs only the `id` field value.
-cat cars.json | ./qjp model -o id
+qjp cars.json -d model -o id
 
-# Display car make and output the price
-cat cars.json | ./qjp make -o price
+# Display multiple attributes (year, make and model) with default separator " - "
+qjp cars.json -d year -d make -d model -o price
+
+# Display multiple attributes with custom separator
+qjp cars.json -d model -d year -s " | "
+
+# Truncate long lines.
+# this can be usefull while working with large objects
+qjp cars.json -t
+
+# Read from stdin (traditional pipe usage)
+cat cars.json | qjp -d model
+
+# Display car make and model and output the price
+cat cars.json | qjp -d make -d model -o price
+
+
+##############################################################
+## Advanced examples
+##############################################################
+
+# Select one of Linus Torvalds repositories on github and output its number of stars
+curl -s "https://api.github.com/users/torvalds/repos" | qjp -d name -d description -o stargazers_count
+
+# Interactively pick one of your EC2 instances and restart it
+aws ec2 reboot-instances --instance-ids $(aws ec2 describe-instances | jq '.Reservations[].Instances[]' | qjp -d State.Name -o InstanceId)
+
+# Select a Kubernetes pod to inspect
+kubectl get pods -o json | jq '.items[]' | qjp -d metadata.name -d status.phase -o metadata.name
+
+# Choose a Docker container
+docker ps --format json | jq -s '.' | qjp -d Names -d Status -o ID
+
+# Browse npm packages
+npm search --json typescript | jq -s '.' | qjp -d name -d description -o name
+
+# Pick a cryptocurrency
+curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50" | qjp -d name -d symbol -d current_price
+
+# Browse Hacker News stories
+curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" | jq '.[0:5]' | xargs -I {} curl -s "https://hacker-news.firebaseio.com/v0/item/{}.json" | jq -s '.' | qjp -d title -d by -o url
+
+# Select a country from REST Countries API
+curl -s "https://restcountries.com/v3.1/all" | qjp -d name.common -d capital -o cca2
+
+# Interactive TODO list management
+curl -s "https://jsonplaceholder.typicode.com/todos" | qjp -d title -d completed -o id
+
+
 ```
 
 ## Keyboard Controls
 
 - **Type**: Filter the list in real-time
 - **Up/Down arrows**: Navigate through the list
-- **Enter**: Select the current item
+- **Ctrl+Space**: Toggle selection (multi-select mode - selected items shown with green background)
+- **Enter**: Confirm selection (outputs selected item(s))
 - **Backspace**: Delete the last character from the filter
 - **Esc** or **Ctrl+C**: Exit without selecting
+
+## FAQs
+  
+**Q: Why did you do this?**
+
+**Q: What can I use qjp for?**
+
+**Q: How do I select more than one attribute to the output?**
+
+**A:** `qjp` is designed to output complete JSON objects or single attributes. If you need to extract multiple attributes in the output, pipe the result through `jq`. For example:
+```bash
+qjp cars.json -d model | jq '{make, model, price}'
+```
 
 ## Development
 
