@@ -352,12 +352,14 @@ func min(a, b int) int {
 }
 
 func output_usage_message_to_stderr() {
-	fmt.Fprintln(os.Stderr, "Usage: qjp [display-attribute] [-o output-attribute] [-t] < input.json")
-	fmt.Fprintln(os.Stderr, "       qjp [-o output-attribute] [-t] [display-attribute] < input.json")
+	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-t]")
+	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-t] < input.json")
 	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Input can be provided via stdin or filename, but not both.")
 	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Options:")
+	fmt.Fprintln(os.Stderr, "  -d <attr>  Display specific attribute in list")
 	fmt.Fprintln(os.Stderr, "  -o <attr>  Output specific attribute from selected object(s)")
 	fmt.Fprintln(os.Stderr, "  -t         Truncate long lines instead of wrapping")
 	fmt.Fprintln(os.Stderr, "")
@@ -368,10 +370,10 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "  ESC/Ctrl+C    Cancel")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp")
-	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp model")
-	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp model -o id")
-	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp -t")
+	fmt.Fprintln(os.Stderr, "  qjp cars.json")
+	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model")
+	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -o id")
+	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp -d model -t")
 }
 
 func main() {
@@ -379,10 +381,14 @@ func main() {
 	var outputAttr string
 	var displayAttr string
 	var truncate bool
+	var filename string
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
-		if args[i] == "-o" && i+1 < len(args) {
+		if args[i] == "-d" && i+1 < len(args) {
+			displayAttr = args[i+1]
+			i++ // skip the next arg
+		} else if args[i] == "-o" && i+1 < len(args) {
 			outputAttr = args[i+1]
 			i++ // skip the next arg
 		} else if args[i] == "-t" {
@@ -391,17 +397,45 @@ func main() {
 			output_usage_message_to_stderr()
 			os.Exit(0)
 		} else if !strings.HasPrefix(args[i], "-") {
-			displayAttr = args[i]
+			filename = args[i]
 		}
 	}
 
 	// displayAttr is optional - if not provided, display whole object
 
-	// Read JSON from stdin
-	input, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+	// Check if stdin has data
+	stdinStat, _ := os.Stdin.Stat()
+	hasStdin := (stdinStat.Mode() & os.ModeCharDevice) == 0
+
+	// Error if both stdin and filename are provided
+	if hasStdin && filename != "" {
+		fmt.Fprintln(os.Stderr, "Error: Cannot use both stdin and filename input. Provide only one.")
 		os.Exit(1)
+	}
+
+	// Error if neither stdin nor filename are provided
+	if !hasStdin && filename == "" {
+		fmt.Fprintln(os.Stderr, "Error: No input provided. Use stdin or provide a filename.")
+		output_usage_message_to_stderr()
+		os.Exit(1)
+	}
+
+	// Read JSON from stdin or file
+	var input []byte
+	var err error
+
+	if filename != "" {
+		input, err = os.ReadFile(filename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading file '%s': %v\n", filename, err)
+			os.Exit(1)
+		}
+	} else {
+		input, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	var objects []map[string]interface{}
