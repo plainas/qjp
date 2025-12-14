@@ -2,8 +2,11 @@
 
 `qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects or plain text lines. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
 
-Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
-Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, and press Enter to output your selection - either as complete JSON objects or just specific field values.
+In short:
+
+ 1.Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
+ 2. Type to filter or use arrow keys to navigate, press Ctrl+Space to multi-select, and press Enter to output your selection
+ 3. `qjp` will output the attribute(s) you specified (using the option `-o`). Or the whols object if no output attribute was specified.
 
 ## Features
 
@@ -173,16 +176,13 @@ curl -s "https://restcountries.com/v3.1/all" | qjp -d name.common -d capital -o 
 
 ## FAQs
   
-**Q: Why did you do this?**
+**Q: Why did you do this?**  
+Becase I wanted a quick and reliable way of adding interactive menus to my shellscripts. 
+Allowing me to browse through human readable options while outputting any other format I wanted.
+Such as UUID or all sorts of machine readable formats.
 
-**Q: What can I use qjp for?**
+**Q: What can I use this for?**
 
-**Q: How do I select more than one attribute to the output?**
-
-**A:** `qjp` is designed to output complete JSON objects or single attributes. If you need to extract multiple attributes in the output, pipe the result through `jq`. For example:
-```bash
-qjp cars.json -d model | jq '{make, model, price}'
-```
 
 ## Development
 
