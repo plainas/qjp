@@ -21,6 +21,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,18 +87,20 @@ type App struct {
 	height       int
 	tty          *os.File
 	truncate     bool
+	tableMode    bool
 	selected     map[int]bool
 	separator    string
+	colWidths    []int
 }
 
-func newApp(objects []map[string]interface{}, displayAttrs []string, outputAttr string, tty *os.File, truncate bool, separator string) *App {
+func newApp(objects []map[string]interface{}, displayAttrs []string, outputAttr string, tty *os.File, truncate bool, tableMode bool, separator string) *App {
 	width, height, _ := getTerminalSize(tty)
 	filtered := make([]int, len(objects))
 	for i := range objects {
 		filtered[i] = i
 	}
 
-	return &App{
+	app := &App{
 		objects:      objects,
 		displayAttrs: displayAttrs,
 		outputAttr:   outputAttr,
@@ -107,8 +111,31 @@ func newApp(objects []map[string]interface{}, displayAttrs []string, outputAttr 
 		height:       height,
 		tty:          tty,
 		truncate:     truncate,
+		tableMode:    tableMode,
 		selected:     make(map[int]bool),
 		separator:    separator,
+	}
+
+	if tableMode && len(displayAttrs) > 0 {
+		app.calculateColumnWidths()
+	}
+
+	return app
+}
+
+func (a *App) calculateColumnWidths() {
+	a.colWidths = make([]int, len(a.displayAttrs))
+
+	// Calculate max width for each column
+	for _, obj := range a.objects {
+		for i, attr := range a.displayAttrs {
+			if val, ok := obj[attr]; ok {
+				valStr := fmt.Sprintf("%v", val)
+				if len(valStr) > a.colWidths[i] {
+					a.colWidths[i] = len(valStr)
+				}
+			}
+		}
 	}
 }
 
@@ -148,16 +175,31 @@ func (a *App) getDisplayValue(obj map[string]interface{}) string {
 
 	// Get values for each display attribute
 	values := []string{}
-	for _, attr := range a.displayAttrs {
+	for i, attr := range a.displayAttrs {
+		var valStr string
 		if val, ok := obj[attr]; ok {
-			values = append(values, fmt.Sprintf("%v", val))
+			valStr = fmt.Sprintf("%v", val)
 		}
+
+		if a.tableMode && i < len(a.colWidths) {
+			// Pad value to column width
+			if i < len(a.displayAttrs)-1 {
+				// Not the last column, pad to width
+				valStr = fmt.Sprintf("%-*s", a.colWidths[i], valStr)
+			}
+			// Last column doesn't need padding
+		}
+
+		values = append(values, valStr)
 	}
 
 	if len(values) == 0 {
 		return ""
 	}
 
+	if a.tableMode {
+		return strings.Join(values, "  ")
+	}
 	return strings.Join(values, a.separator)
 }
 
@@ -178,6 +220,18 @@ func (a *App) calculateLines(displayVal string) int {
 		return 1
 	}
 	return lines
+}
+
+func (a *App) getMaxDisplayWidth() int {
+	maxWidth := 0
+	for _, idx := range a.filtered {
+		obj := a.objects[idx]
+		displayVal := a.getDisplayValue(obj)
+		if len(displayVal) > maxWidth {
+			maxWidth = len(displayVal)
+		}
+	}
+	return maxWidth
 }
 
 func (a *App) render() {
@@ -235,6 +289,9 @@ func (a *App) render() {
 		}
 	}
 
+	// Calculate max display width for uniform background highlighting
+	maxDisplayWidth := a.getMaxDisplayWidth()
+
 	// Display items
 	for i := start; i < end; i++ {
 		idx := a.filtered[i]
@@ -249,16 +306,19 @@ func (a *App) render() {
 			}
 		}
 
+		// Pad display value to max width for uniform highlighting
+		paddedVal := fmt.Sprintf("%-*s", maxDisplayWidth, displayVal)
+
 		isSelected := a.selected[idx]
 		if i == a.cursor {
 			if isSelected {
-				fmt.Fprintf(a.tty, "%s%s> %s%s\r\n", colorReverse, colorSelected, displayVal, colorReset)
+				fmt.Fprintf(a.tty, "%s%s> %s%s\r\n", colorReverse, colorSelected, paddedVal, colorReset)
 			} else {
-				fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, displayVal, colorReset)
+				fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, paddedVal, colorReset)
 			}
 		} else {
 			if isSelected {
-				fmt.Fprintf(a.tty, "%s  %s%s\r\n", colorSelected, displayVal, colorReset)
+				fmt.Fprintf(a.tty, "%s  %s%s\r\n", colorSelected, paddedVal, colorReset)
 			} else {
 				fmt.Fprintf(a.tty, "  %s\r\n", displayVal)
 			}
@@ -364,8 +424,8 @@ func min(a, b int) int {
 }
 
 func output_usage_message_to_stderr() {
-	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t]")
-	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] < input.json")
+	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l]")
+	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] < input")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Input can be provided via stdin or filename, but not both.")
 	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
@@ -375,6 +435,8 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "  -o <attr>  Output specific attribute from selected object(s)")
 	fmt.Fprintln(os.Stderr, "  -s <sep>   Separator for multiple display attributes (default: \" - \")")
 	fmt.Fprintln(os.Stderr, "  -t         Truncate long lines instead of wrapping")
+	fmt.Fprintln(os.Stderr, "  -T         Table mode: align attributes in columns")
+	fmt.Fprintln(os.Stderr, "  -l         Line mode: treat input as plain text lines (like percol)")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Controls:")
 	fmt.Fprintln(os.Stderr, "  Arrow Keys    Navigate up/down")
@@ -382,13 +444,16 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "  Enter         Confirm selection")
 	fmt.Fprintln(os.Stderr, "  ESC/Ctrl+C    Cancel")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintln(os.Stderr, "Examples:")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year -s \" | \"")
+	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year -T")
 	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -o id")
 	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp -d model -t")
+	fmt.Fprintln(os.Stderr, "  ls -la | qjp -l")
+	fmt.Fprintln(os.Stderr, "  cat file.txt | qjp -l")
 }
 
 func main() {
@@ -396,6 +461,8 @@ func main() {
 	var outputAttr string
 	var displayAttrs []string
 	var truncate bool
+	var tableMode bool
+	var lineMode bool
 	var filename string
 	var separator string = " - " // Default separator
 
@@ -412,11 +479,39 @@ func main() {
 			i++ // skip the next arg
 		} else if args[i] == "-t" {
 			truncate = true
+		} else if args[i] == "-T" {
+			tableMode = true
+		} else if args[i] == "-l" {
+			lineMode = true
 		} else if args[i] == "-h" || args[i] == "--help" {
 			output_usage_message_to_stderr()
 			os.Exit(0)
 		} else if !strings.HasPrefix(args[i], "-") {
 			filename = args[i]
+		}
+	}
+
+	// Validate flag combinations
+	if lineMode {
+		if len(displayAttrs) > 0 {
+			fmt.Fprintln(os.Stderr, "Error: Cannot use -d in line mode")
+			os.Exit(1)
+		}
+		if outputAttr != "" {
+			fmt.Fprintln(os.Stderr, "Error: Cannot use -o in line mode")
+			os.Exit(1)
+		}
+		if separator != " - " {
+			fmt.Fprintln(os.Stderr, "Error: Cannot use -s in line mode")
+			os.Exit(1)
+		}
+		if truncate {
+			fmt.Fprintln(os.Stderr, "Error: Cannot use -t in line mode")
+			os.Exit(1)
+		}
+		if tableMode {
+			fmt.Fprintln(os.Stderr, "Error: Cannot use -T in line mode")
+			os.Exit(1)
 		}
 	}
 
@@ -439,7 +534,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Read JSON from stdin or file
+	// Read input from stdin or file
 	var input []byte
 	var err error
 
@@ -458,9 +553,30 @@ func main() {
 	}
 
 	var objects []map[string]interface{}
-	if err := json.Unmarshal(input, &objects); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing JSON: %v\n", err)
-		os.Exit(1)
+
+	if lineMode {
+		// Line mode: read input as lines
+		scanner := bufio.NewScanner(bytes.NewReader(input))
+		for scanner.Scan() {
+			line := scanner.Text()
+			objects = append(objects, map[string]interface{}{
+				"line": line,
+			})
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading lines: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Force line mode settings
+		displayAttrs = []string{"line"}
+		outputAttr = "line"
+	} else {
+		// JSON mode: parse as JSON array
+		if err := json.Unmarshal(input, &objects); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing JSON: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	if len(objects) == 0 {
@@ -476,7 +592,7 @@ func main() {
 	}
 	defer tty.Close()
 
-	app := newApp(objects, displayAttrs, outputAttr, tty, truncate, separator)
+	app := newApp(objects, displayAttrs, outputAttr, tty, truncate, tableMode, separator)
 	selectedIndices, err := app.run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -501,6 +617,14 @@ func main() {
 						}
 					case string:
 						fmt.Println(v)
+					case []interface{}, map[string]interface{}:
+						// Output arrays and objects as single-line JSON
+						jsonBytes, err := json.Marshal(v)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Error marshaling output: %v\n", err)
+							os.Exit(1)
+						}
+						fmt.Println(string(jsonBytes))
 					default:
 						fmt.Println(v)
 					}

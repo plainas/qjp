@@ -1,0 +1,77 @@
+[
+  {
+    "id": "car-001",
+    "make": "Toyota",
+    "model": "Camry",
+    "year": 2022,
+    "price": 27999.99,
+    "available": true,
+    "engine": {
+      "type": "inline-4",
+      "horsepower": 203,
+      "displacement_l": 2.5,
+      "fuel": "gasoline",
+      "features": ["variable valve timing", "direct injection"]
+    }
+  },
+  {
+    "id": "car-002",
+    "make": "Honda",
+    "model": "Civic",
+    "year": 2021,
+    "price": 23950.0,
+    "available": false,
+    "engine": {
+      "type": "inline-4",
+      "horsepower": 158,
+      "displacement_l": 2.0,
+      "fuel": "gasoline",
+      "features": ["eco mode"]
+    }
+  },
+  {
+    "id": "car-003",
+    "make": "Ford",
+    "model": "Mustang",
+    "year": 2023,
+    "price": 42999.0,
+    "available": true,
+    "engine": {
+      "type": "v8",
+      "horsepower": 450,
+      "displacement_l": 5.0,
+      "fuel": "gasoline",
+      "features": ["turbocharged", "performance exhaust"]
+    }
+  },
+  {
+    "id": "car-004",
+    "make": "Tesla",
+    "model": "Model 3",
+    "year": 2023,
+    "price": 39999.99,
+    "available": true,
+    "engine": {
+      "type": "electric",
+      "horsepower": 283,
+      "battery_kwh": 60,
+      "range_miles": 272,
+      "features": ["regenerative braking", "single-speed transmission"]
+    }
+  },
+  {
+    "id": "car-005",
+    "make": "Volkswagen",
+    "model": "Golf",
+    "year": 2020,
+    "price": 21999.0,
+    "available": false,
+    "engine": {
+      "type": "inline-4",
+      "horsepower": 147,
+      "displacement_l": 1.4,
+      "fuel": "gasoline",
+      "features": ["start-stop system"]
+    }
+  }
+]

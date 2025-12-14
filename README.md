@@ -1,23 +1,25 @@
 # qjp
 
-`qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
+`qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects or plain text lines. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
 
-Feed it a JSON array via stdin or from a file, optionally specify which field(s) to display, and qjp will present an interactive list.
+Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
 Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, and press Enter to output your selection - either as complete JSON objects or just specific field values.
 
 ## Features
 
-- Interactive filtering and selection of JSON objects
+- Interactive filtering and selection of JSON objects or plain text lines
+- Real-time filtering as you type
 - Navigate with arrow keys
 - Multi-select support with Ctrl+Space
 - Ctrl+C or ESC to exit without selecting anything
 - Read from stdin or directly from a file
 - Display one or multiple attributes while browsing
 - Customizable display separator for multiple attributes
-- Optional line truncation for long content
+- Table mode, displaying attributes vertically aligned for readability
+- Line mode. Ignore json, behave like percol
+- Optional line truncation for long content. Wraps lines otherwise.
 - Output the entire selected object(s) or a specific attribute
-- Real-time filtering as you type
-
+- Arrays and objects output as single-line JSON
 
 ## Installation
 
@@ -67,17 +69,19 @@ go build -o qjp
 ## Usage
 
 ```
-qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t]
-qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] < input.json
+qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l]
+qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] < input
 ```
 
 ### Arguments
 
-- `filename`: (optional) JSON file to read. If not provided, reads from stdin.
+- `filename`: (optional) JSON file to read (or plain text with `-l`). If not provided, reads from stdin.
 - `-d <attribute>`: Display specific attribute(s) in list (can be used multiple times for multiple attributes)
-- `-o <attribute>`: Output specific attribute from selected object(s)
+- `-o <attribute>`: Output specific attribute from selected object(s). Arrays and objects are output as single-line JSON.
 - `-s <separator>`: Separator for multiple display attributes (default: " - ")
 - `-t`: Truncate long lines instead of wrapping
+- `-T`: Table mode - align attributes in columns
+- `-l`: Line mode - treat input as plain text lines (like percol). Cannot be used with `-d`, `-o`, `-s`, `-t`, or `-T`.
 - `-h, --help`: Show help message
 
 **Note:** Input can be provided via stdin or filename, but not both.
@@ -115,6 +119,9 @@ qjp cars.json -d year -d make -d model -o price
 # Display multiple attributes with custom separator
 qjp cars.json -d model -d year -s " | "
 
+# Display multiple attributes in table mode (aligned columns)
+qjp cars.json -d make -d model -d year -T
+
 # Truncate long lines.
 # this can be usefull while working with large objects
 qjp cars.json -t
@@ -125,6 +132,11 @@ cat cars.json | qjp -d model
 # Display car make and model and output the price
 cat cars.json | qjp -d make -d model -o price
 
+# Line mode: select from plain text lines (like percol)
+ls -la | qjp -l
+cat file.txt | qjp -l
+ps aux | qjp -l
+
 
 ##############################################################
 ## Advanced examples
@@ -133,29 +145,19 @@ cat cars.json | qjp -d make -d model -o price
 # Select one of Linus Torvalds repositories on github and output its number of stars
 curl -s "https://api.github.com/users/torvalds/repos" | qjp -d name -d description -o stargazers_count
 
-# Interactively pick one of your EC2 instances and restart it
-aws ec2 reboot-instances --instance-ids $(aws ec2 describe-instances | jq '.Reservations[].Instances[]' | qjp -d State.Name -o InstanceId)
 
-# Select a Kubernetes pod to inspect
-kubectl get pods -o json | jq '.items[]' | qjp -d metadata.name -d status.phase -o metadata.name
-
-# Choose a Docker container
+# Get the ID of a docker container by name. Useful to feed into other commands
 docker ps --format json | jq -s '.' | qjp -d Names -d Status -o ID
 
 # Browse npm packages
 npm search --json typescript | jq -s '.' | qjp -d name -d description -o name
 
-# Pick a cryptocurrency
-curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50" | qjp -d name -d symbol -d current_price
+# Pick a cryptocurrency and retrieve its details from coingecko
+curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50" | qjp -d name -d symbol -d current_price | jq .
 
-# Browse Hacker News stories
-curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" | jq '.[0:5]' | xargs -I {} curl -s "https://hacker-news.firebaseio.com/v0/item/{}.json" | jq -s '.' | qjp -d title -d by -o url
 
 # Select a country from REST Countries API
 curl -s "https://restcountries.com/v3.1/all" | qjp -d name.common -d capital -o cca2
-
-# Interactive TODO list management
-curl -s "https://jsonplaceholder.typicode.com/todos" | qjp -d title -d completed -o id
 
 
 ```
@@ -194,8 +196,8 @@ This project includes GitHub Actions workflows for automated building and releas
 
 To create a new release:
 ```bash
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
 ```
 
 The GoReleaser workflow will automatically build binaries for all supported platforms and create a GitHub release.

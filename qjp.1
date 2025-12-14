@@ -1,6 +1,6 @@
 .TH QJP 1 "December 2024" "qjp" "User Commands"
 .SH NAME
-qjp \- quick json picker, an interactive JSON object selector
+qjp \- quick json picker, an interactive JSON object and text line selector
 .SH SYNOPSIS
 .B qjp
 .RI [ filename ]
@@ -11,6 +11,8 @@ qjp \- quick json picker, an interactive JSON object selector
 .RB [ \-s
 .IR separator ]
 .RB [ \-t ]
+.RB [ \-T ]
+.RB [ \-l ]
 .br
 .B qjp
 .RB [ \-d
@@ -20,36 +22,56 @@ qjp \- quick json picker, an interactive JSON object selector
 .RB [ \-s
 .IR separator ]
 .RB [ \-t ]
+.RB [ \-T ]
+.RB [ \-l ]
 .B <
-.I input.json
+.I input
 .br
 .B qjp
 .RB [ \-h | \-\-help ]
 .SH DESCRIPTION
 .B qjp
-(quick json picker) is an interactive command-line tool for filtering and selecting JSON objects, similar to
+(quick json picker) is an interactive command-line tool for filtering and selecting JSON objects or plain text lines, similar to
 .BR percol " and " fzf .
-It reads an array of JSON objects from a file or standard input, displays specified attribute(s) for each object in an interactive list, and outputs the selected object(s) (or specific attributes) to standard output.
+It reads an array of JSON objects (or plain text lines with
+.BR \-l )
+from a file or standard input, displays specified attribute(s) for each object in an interactive list, and outputs the selected object(s) (or specific attributes) to standard output.
 .PP
-The tool provides real-time filtering as you type, allowing you to quickly narrow down large JSON datasets. Navigation is performed using arrow keys, multi-selection with Ctrl+Space, and final selection with the Enter key. Selected items are highlighted with a green background.
+The tool provides real-time filtering as you type, allowing you to quickly narrow down large JSON datasets or line-based content. Navigation is performed using arrow keys, multi-selection with Ctrl+Space, and final selection with the Enter key. Selected items are highlighted with a green background.
 .SH OPTIONS
 .TP
 .I filename
-Optional positional argument specifying the JSON file to read. If not provided, reads from standard input. Cannot be used together with stdin input.
+Optional positional argument specifying the JSON file to read (or plain text file with
+.BR \-l ).
+If not provided, reads from standard input. Cannot be used together with stdin input.
 .TP
 .BR \-d ", " " " \fIdisplay-attribute\fR
-The JSON attribute to display for each object in the interactive list. Can be specified multiple times to display multiple attributes separated by the separator string. If not specified, the entire object is displayed as JSON.
+The JSON attribute to display for each object in the interactive list. Can be specified multiple times to display multiple attributes separated by the separator string. If not specified, the entire object is displayed as JSON. Cannot be used with
+.BR \-l .
 .TP
 .BR \-o ", " " " \fIoutput-attribute\fR
-The JSON attribute to output when object(s) are selected. If not specified, the entire selected object(s) are output as single-line JSON strings.
+The JSON attribute to output when object(s) are selected. If not specified, the entire selected object(s) are output as single-line JSON strings. Arrays and objects within the output are also formatted as single-line JSON. Cannot be used with
+.BR \-l .
 .TP
 .BR \-s ", " " " \fIseparator\fR
 Separator string to use when displaying multiple attributes (specified with multiple
 .B \-d
-flags). Default is " \- " (space, dash, space).
+flags). Default is " \- " (space, dash, space). Cannot be used with
+.BR \-l .
 .TP
 .BR \-t
-Truncate long lines instead of wrapping them. Useful for very long content to keep each item on a single line.
+Truncate long lines instead of wrapping them. Useful for very long content to keep each item on a single line. Cannot be used with
+.BR \-l .
+.TP
+.BR \-T
+Table mode: align multiple display attributes in columns with consistent spacing. Each attribute is padded to the width of its longest value. Cannot be used with
+.BR \-l .
+.TP
+.BR \-l
+Line mode: treat input as plain text lines instead of JSON. Each line becomes a selectable item, and selected lines are output verbatim. Behaves like
+.BR percol .
+Cannot be used with
+.BR \-d ", " \-o ", " \-s ", " \-t ", or " \-T .
 .TP
 .BR \-h ", " \-\-help
 Display usage information and exit.
@@ -77,31 +99,31 @@ Read from file and display entire objects:
 .PP
 .nf
 .RS
-qjp cars.json
+qjp data.json
 .RE
 .fi
 .PP
-Read from file and display car models:
+Read from file and display specific attribute:
 .PP
 .nf
 .RS
-qjp cars.json \-d model
+qjp data.json \-d name
 .RE
 .fi
 .PP
-Display car models and output only the ID field:
+Display attribute and output only the ID field:
 .PP
 .nf
 .RS
-qjp cars.json \-d model \-o id
+qjp data.json \-d name \-o id
 .RE
 .fi
 .PP
-Display multiple attributes (model and year) with default separator:
+Display multiple attributes with default separator:
 .PP
 .nf
 .RS
-qjp cars.json \-d model \-d year
+qjp data.json \-d name \-d category
 .RE
 .fi
 .PP
@@ -109,7 +131,15 @@ Display multiple attributes with custom separator:
 .PP
 .nf
 .RS
-qjp cars.json \-d model \-d year \-s " | "
+qjp data.json \-d name \-d category \-s " | "
+.RE
+.fi
+.PP
+Display multiple attributes in table mode (aligned columns):
+.PP
+.nf
+.RS
+qjp data.json \-d name \-d category \-d value \-T
 .RE
 .fi
 .PP
@@ -117,7 +147,7 @@ Use truncation for long lines:
 .PP
 .nf
 .RS
-qjp cars.json \-t
+qjp data.json \-t
 .RE
 .fi
 .PP
@@ -125,7 +155,31 @@ Read from stdin (traditional pipe usage):
 .PP
 .nf
 .RS
-cat cars.json | qjp \-d model
+cat data.json | qjp \-d name
+.RE
+.fi
+.PP
+Line mode: select from plain text lines (like percol):
+.PP
+.nf
+.RS
+ls \-la | qjp \-l
+.RE
+.fi
+.PP
+Line mode with file input:
+.PP
+.nf
+.RS
+qjp file.txt \-l
+.RE
+.fi
+.PP
+Line mode with command output:
+.PP
+.nf
+.RS
+ps aux | qjp \-l
 .RE
 .fi
 .PP
@@ -133,7 +187,7 @@ Chain with jq for further processing:
 .PP
 .nf
 .RS
-qjp cars.json \-d model | jq '.price'
+qjp data.json \-d name | jq '.value'
 .RE
 .fi
 .PP
@@ -141,44 +195,30 @@ Multi-select example (use Ctrl+Space to select items, then Enter):
 .PP
 .nf
 .RS
-qjp cars.json \-d model \-o id
-# Use Ctrl+Space to select multiple cars, press Enter to output all IDs
+qjp data.json \-d name \-o id
+# Use Ctrl+Space to select multiple items, press Enter to output all IDs
 .RE
 .fi
 .SH INPUT FORMAT
 .B qjp
 expects a JSON array of objects on standard input. Each object in the array should have the display attribute specified as an argument.
 .PP
-Example input format:
-.PP
-.nf
-.RS
-[
-  {
-    "id": 1,
-    "make": "Toyota",
-    "model": "Camry",
-    "year": 2022
-  },
-  {
-    "id": 2,
-    "make": "Tesla",
-    "model": "Model 3",
-    "year": 2023
-  }
-]
-.RE
 .fi
 .SH OUTPUT FORMAT
 The output format depends on whether the
 .B \-o
-option is used and whether multiple items are selected:
+option is used, whether multiple items are selected, and whether
+.B \-l
+(line mode) is used:
 .TP
-.B Without \-o
+.B Without \-o (JSON mode)
 The entire selected JSON object(s) are output, one per line. Each object is formatted as a single-line JSON string.
 .TP
-.B With \-o
-Only the value of the specified attribute is output for each selected object, one per line. Numeric values are output as integers when appropriate (e.g., 42 instead of 42.0).
+.B With \-o (JSON mode)
+Only the value of the specified attribute is output for each selected object, one per line. Numeric values are output as integers when appropriate (e.g., 42 instead of 42.0). Array and object values are output as single-line JSON strings.
+.TP
+.B Line mode (\-l)
+Selected lines are output verbatim, one per line, exactly as they appeared in the input.
 .TP
 .B Multi-select
 When multiple items are selected using Ctrl+Space, all selected items are output in order (sorted by their original index), one per line.
