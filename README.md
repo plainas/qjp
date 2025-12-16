@@ -2,25 +2,20 @@
 
 `qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects or plain text lines. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
 
-In short:
-
- 1.Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
- 2. Type to filter or use arrow keys to navigate, press Ctrl+Space to multi-select, and press Enter to output your selection
- 3. `qjp` will output the attribute(s) you specified (using the option `-o`). Or the whols object if no output attribute was specified.
+Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
+Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, press Enter to output your selection - either as complete JSON objects or just specific field values.
 
 ## Features
 
 - Interactive filtering and selection of JSON objects or plain text lines
+- Control over what gets displayed and what gets output.
 - Real-time filtering as you type
-- Navigate with arrow keys
 - Multi-select support with Ctrl+Space
-- Ctrl+C or ESC to exit without selecting anything
 - Read from stdin or directly from a file
 - Display one or multiple attributes while browsing
-- Customizable display separator for multiple attributes
 - Table mode, displaying attributes vertically aligned for readability
 - Line mode. Ignore json, behave like percol
-- Optional line truncation for long content. Wraps lines otherwise.
+- Optional line truncate for long content. Wraps lines otherwise.
 - Output the entire selected object(s) or a specific attribute
 - Arrays and objects output as single-line JSON
 
@@ -29,7 +24,6 @@ In short:
 ### Download Pre-built Binaries
 
 Download the binary directly for your platform from the [Releases](https://github.com/plainas/qjp/releases) page.
-
 
 #### Quick install scripts
 ```sh
@@ -72,8 +66,8 @@ go build -o qjp
 ## Usage
 
 ```
-qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l]
-qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] < input
+qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] [-a]
+qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] [-a] < input
 ```
 
 ### Arguments
@@ -84,7 +78,8 @@ qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] <
 - `-s <separator>`: Separator for multiple display attributes (default: " - ")
 - `-t`: Truncate long lines instead of wrapping
 - `-T`: Table mode - align attributes in columns
-- `-l`: Line mode - treat input as plain text lines (like percol). Cannot be used with `-d`, `-o`, `-s`, `-t`, or `-T`.
+- `-l`: Line mode - treat input as plain text lines (like percol). Cannot be used with `-d`, `-o`, `-s`, `-t`, `-T`, or `-a`.
+- `-a`: Display all attributes - automatically discover and display all unique attributes from all objects in alphabetical order. Cannot be used with `-d` or `-l`. Particularly useful with `-T` for a structured overview.
 - `-h, --help`: Show help message
 
 **Note:** Input can be provided via stdin or filename, but not both.
@@ -95,6 +90,15 @@ man ./qjp.1
 # Or after installation:
 man qjp
 ```
+
+## Keyboard Controls
+
+- **Type**: Filter the list in real-time
+- **Up/Down arrows**: Navigate through the list
+- **Ctrl+Space**: Toggle selection (multi-select mode - selected items shown with green background)
+- **Enter**: Confirm selection (outputs selected item(s))
+- **Backspace**: Delete the last character from the filter
+- **Esc** or **Ctrl+C**: Exit without selecting
 
 ## Examples
 
@@ -125,6 +129,13 @@ qjp cars.json -d model -d year -s " | "
 # Display multiple attributes in table mode (aligned columns)
 qjp cars.json -d make -d model -d year -T
 
+# Display all attributes (discovers all keys automatically)
+qjp cars.json -a
+
+# Display all attributes in table mode
+# Useful for quickly inspecting the contents of a file
+qjp cars.json -a -T
+
 # Truncate long lines.
 # this can be usefull while working with large objects
 qjp cars.json -t
@@ -148,40 +159,22 @@ ps aux | qjp -l
 # Select one of Linus Torvalds repositories on github and output its number of stars
 curl -s "https://api.github.com/users/torvalds/repos" | qjp -d name -d description -o stargazers_count
 
+# A country picker that display common names and outpouts two leter country codes.
+curl -s "https://www.apicountries.com/countries" | qjp -d name -o alpha2Code
+
+# Minimal lobste.rs reased on your terminal
+curl -s "https://lobste.rs/hottest.json" | ./qjp -d title -o url | xargs lynx
 
 # Get the ID of a docker container by name. Useful to feed into other commands
 docker ps --format json | jq -s '.' | qjp -d Names -d Status -o ID
 
-# Browse npm packages
-npm search --json typescript | jq -s '.' | qjp -d name -d description -o name
+# a quick way to find and install npm packages
+npm search --json typescript | qjp -d name -d description -o name | xargs npm install
 
 # Pick a cryptocurrency and retrieve its details from coingecko
 curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50" | qjp -d name -d symbol -d current_price | jq .
-
-
-# Select a country from REST Countries API
-curl -s "https://restcountries.com/v3.1/all" | qjp -d name.common -d capital -o cca2
-
-
 ```
 
-## Keyboard Controls
-
-- **Type**: Filter the list in real-time
-- **Up/Down arrows**: Navigate through the list
-- **Ctrl+Space**: Toggle selection (multi-select mode - selected items shown with green background)
-- **Enter**: Confirm selection (outputs selected item(s))
-- **Backspace**: Delete the last character from the filter
-- **Esc** or **Ctrl+C**: Exit without selecting
-
-## FAQs
-  
-**Q: Why did you do this?**  
-Becase I wanted a quick and reliable way of adding interactive menus to my shellscripts. 
-Allowing me to browse through human readable options while outputting any other format I wanted.
-Such as UUID or all sorts of machine readable formats.
-
-**Q: What can I use this for?**
 
 
 ## Development
@@ -216,6 +209,15 @@ GOOS=darwin GOARCH=arm64 go build -o qjp-darwin-arm64
 # Windows AMD64
 GOOS=windows GOARCH=amd64 go build -o qjp-windows-amd64.exe
 ```
+
+
+# TODO
+
+ * Support jq syntax
+ * Add support for jsonlines input
+ * Add a classifier to automatically detect input format
+ * output as json array
+ * add option to output single values as json encoded
 
 ## License
 

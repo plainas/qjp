@@ -1,4 +1,4 @@
-.TH QJP 1 "December 2024" "qjp" "User Commands"
+.TH QJP 1 "December 2025" "qjp" "User Commands"
 .SH NAME
 qjp \- quick json picker, an interactive JSON object and text line selector
 .SH SYNOPSIS
@@ -13,6 +13,7 @@ qjp \- quick json picker, an interactive JSON object and text line selector
 .RB [ \-t ]
 .RB [ \-T ]
 .RB [ \-l ]
+.RB [ \-a ]
 .br
 .B qjp
 .RB [ \-d
@@ -24,6 +25,7 @@ qjp \- quick json picker, an interactive JSON object and text line selector
 .RB [ \-t ]
 .RB [ \-T ]
 .RB [ \-l ]
+.RB [ \-a ]
 .B <
 .I input
 .br
@@ -47,7 +49,7 @@ If not provided, reads from standard input. Cannot be used together with stdin i
 .TP
 .BR \-d ", " " " \fIdisplay-attribute\fR
 The JSON attribute to display for each object in the interactive list. Can be specified multiple times to display multiple attributes separated by the separator string. If not specified, the entire object is displayed as JSON. Cannot be used with
-.BR \-l .
+.BR \-l " or " \-a .
 .TP
 .BR \-o ", " " " \fIoutput-attribute\fR
 The JSON attribute to output when object(s) are selected. If not specified, the entire selected object(s) are output as single-line JSON strings. Arrays and objects within the output are also formatted as single-line JSON. Cannot be used with
@@ -71,7 +73,14 @@ Table mode: align multiple display attributes in columns with consistent spacing
 Line mode: treat input as plain text lines instead of JSON. Each line becomes a selectable item, and selected lines are output verbatim. Behaves like
 .BR percol .
 Cannot be used with
-.BR \-d ", " \-o ", " \-s ", " \-t ", or " \-T .
+.BR \-d ", " \-o ", " \-s ", " \-t ", " \-T ", or " \-a .
+.TP
+.BR \-a
+Display all attributes: automatically display all unique attributes found across all JSON objects in the input. Attributes are displayed in alphabetical order. Cannot be used with
+.BR \-d " or " \-l .
+Particularly useful with
+.BR \-T
+(table mode) for a well-formatted overview of all object properties.
 .TP
 .BR \-h ", " \-\-help
 Display usage information and exit.
@@ -140,6 +149,22 @@ Display multiple attributes in table mode (aligned columns):
 .nf
 .RS
 qjp data.json \-d name \-d category \-d value \-T
+.RE
+.fi
+.PP
+Display all attributes (discovers all keys automatically):
+.PP
+.nf
+.RS
+qjp data.json \-a
+.RE
+.fi
+.PP
+Display all attributes in table mode for a structured overview:
+.PP
+.nf
+.RS
+qjp data.json \-a \-T
 .RE
 .fi
 .PP

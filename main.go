@@ -36,18 +36,18 @@ import (
 
 const (
 	// ANSI escape codes
-	clearScreen    = "\033[2J"
-	cursorHome     = "\033[H"
-	hideCursor     = "\033[?25l"
-	showCursor     = "\033[?25h"
-	clearLine      = "\033[2K"
-	colorReset     = "\033[0m"
-	colorReverse   = "\033[7m"
-	colorCyan      = "\033[36m"
-	colorGreen     = "\033[32m"
-	colorSelected  = "\033[42m" // Green background for selected
-	altScreenOn    = "\033[?1049h"
-	altScreenOff   = "\033[?1049l"
+	clearScreen   = "\033[2J"
+	cursorHome    = "\033[H"
+	hideCursor    = "\033[?25l"
+	showCursor    = "\033[?25h"
+	clearLine     = "\033[2K"
+	colorReset    = "\033[0m"
+	colorReverse  = "\033[7m"
+	colorCyan     = "\033[36m"
+	colorGreen    = "\033[32m"
+	colorSelected = "\033[42m" // Green background for selected
+	altScreenOn   = "\033[?1049h"
+	altScreenOff  = "\033[?1049l"
 )
 
 func setRawMode(fd uintptr) (*term.State, error) {
@@ -178,7 +178,18 @@ func (a *App) getDisplayValue(obj map[string]interface{}) string {
 	for i, attr := range a.displayAttrs {
 		var valStr string
 		if val, ok := obj[attr]; ok {
-			valStr = fmt.Sprintf("%v", val)
+			// Check if value is an object or array, serialize to JSON
+			switch v := val.(type) {
+			case map[string]interface{}, []interface{}:
+				jsonBytes, err := json.Marshal(v)
+				if err == nil {
+					valStr = string(jsonBytes)
+				} else {
+					valStr = fmt.Sprintf("%v", val)
+				}
+			default:
+				valStr = fmt.Sprintf("%v", val)
+			}
 		}
 
 		if a.tableMode && i < len(a.colWidths) {
@@ -292,6 +303,21 @@ func (a *App) render() {
 	// Calculate max display width for uniform background highlighting
 	maxDisplayWidth := a.getMaxDisplayWidth()
 
+	// Check if any lines will wrap (only if not truncating)
+	hasWrappingLines := false
+	if !a.truncate {
+		effectiveWidth := a.width - 2 // Account for "> " or "  " prefix
+		for i := start; i < end; i++ {
+			idx := a.filtered[i]
+			obj := a.objects[idx]
+			displayVal := a.getDisplayValue(obj)
+			if len(displayVal) > effectiveWidth {
+				hasWrappingLines = true
+				break
+			}
+		}
+	}
+
 	// Display items
 	for i := start; i < end; i++ {
 		idx := a.filtered[i]
@@ -306,19 +332,26 @@ func (a *App) render() {
 			}
 		}
 
-		// Pad display value to max width for uniform highlighting
-		paddedVal := fmt.Sprintf("%-*s", maxDisplayWidth, displayVal)
+		// Pad display value for uniform highlighting, but only if:
+		// - truncate mode is enabled, OR
+		// - no lines are wrapping
+		var renderVal string
+		if a.truncate || !hasWrappingLines {
+			renderVal = fmt.Sprintf("%-*s", maxDisplayWidth, displayVal)
+		} else {
+			renderVal = displayVal
+		}
 
 		isSelected := a.selected[idx]
 		if i == a.cursor {
 			if isSelected {
-				fmt.Fprintf(a.tty, "%s%s> %s%s\r\n", colorReverse, colorSelected, paddedVal, colorReset)
+				fmt.Fprintf(a.tty, "%s%s> %s%s\r\n", colorReverse, colorSelected, renderVal, colorReset)
 			} else {
-				fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, paddedVal, colorReset)
+				fmt.Fprintf(a.tty, "%s> %s%s\r\n", colorReverse, renderVal, colorReset)
 			}
 		} else {
 			if isSelected {
-				fmt.Fprintf(a.tty, "%s  %s%s\r\n", colorSelected, paddedVal, colorReset)
+				fmt.Fprintf(a.tty, "%s  %s%s\r\n", colorSelected, renderVal, colorReset)
 			} else {
 				fmt.Fprintf(a.tty, "  %s\r\n", displayVal)
 			}
@@ -424,8 +457,8 @@ func min(a, b int) int {
 }
 
 func output_usage_message_to_stderr() {
-	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l]")
-	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] < input")
+	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] [-a]")
+	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] [-a] < input")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Input can be provided via stdin or filename, but not both.")
 	fmt.Fprintln(os.Stderr, "If no display-attribute is provided, the whole object is displayed.")
@@ -437,6 +470,7 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "  -t         Truncate long lines instead of wrapping")
 	fmt.Fprintln(os.Stderr, "  -T         Table mode: align attributes in columns")
 	fmt.Fprintln(os.Stderr, "  -l         Line mode: treat input as plain text lines (like percol)")
+	fmt.Fprintln(os.Stderr, "  -a         Display all attributes (cannot be used with -d)")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Controls:")
 	fmt.Fprintln(os.Stderr, "  Arrow Keys    Navigate up/down")
@@ -445,14 +479,8 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "  ESC/Ctrl+C    Cancel")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Examples:")
-	fmt.Fprintln(os.Stderr, "  qjp cars.json")
-	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model")
-	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year")
-	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year -s \" | \"")
-	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -d year -T")
-	fmt.Fprintln(os.Stderr, "  qjp cars.json -d model -o id")
-	fmt.Fprintln(os.Stderr, "  cat cars.json | qjp -d model -t")
-	fmt.Fprintln(os.Stderr, "  ls -la | qjp -l")
+	fmt.Fprintln(os.Stderr, "  qjp yourfile.json -d display_attribute -o output_attribute")
+	fmt.Fprintln(os.Stderr, "  qjp -d name -d id -T < data.json")
 	fmt.Fprintln(os.Stderr, "  cat file.txt | qjp -l")
 }
 
@@ -463,6 +491,7 @@ func main() {
 	var truncate bool
 	var tableMode bool
 	var lineMode bool
+	var allAttrs bool
 	var filename string
 	var separator string = " - " // Default separator
 
@@ -483,6 +512,8 @@ func main() {
 			tableMode = true
 		} else if args[i] == "-l" {
 			lineMode = true
+		} else if args[i] == "-a" {
+			allAttrs = true
 		} else if args[i] == "-h" || args[i] == "--help" {
 			output_usage_message_to_stderr()
 			os.Exit(0)
@@ -492,9 +523,18 @@ func main() {
 	}
 
 	// Validate flag combinations
+	if allAttrs && len(displayAttrs) > 0 {
+		fmt.Fprintln(os.Stderr, "Error: Cannot use both -a and -d")
+		os.Exit(1)
+	}
+
 	if lineMode {
 		if len(displayAttrs) > 0 {
 			fmt.Fprintln(os.Stderr, "Error: Cannot use -d in line mode")
+			os.Exit(1)
+		}
+		if allAttrs {
+			fmt.Fprintln(os.Stderr, "Error: Cannot use -a in line mode")
 			os.Exit(1)
 		}
 		if outputAttr != "" {
@@ -582,6 +622,22 @@ func main() {
 	if len(objects) == 0 {
 		fmt.Fprintln(os.Stderr, "No objects found in input")
 		os.Exit(1)
+	}
+
+	// If -a flag is set, collect all attributes from all objects
+	if allAttrs {
+		attrMap := make(map[string]bool)
+		for _, obj := range objects {
+			for key := range obj {
+				attrMap[key] = true
+			}
+		}
+		// Convert map to sorted slice for consistent order
+		displayAttrs = make([]string, 0, len(attrMap))
+		for key := range attrMap {
+			displayAttrs = append(displayAttrs, key)
+		}
+		sort.Strings(displayAttrs)
 	}
 
 	// Open /dev/tty for interactive input/output
