@@ -5,6 +5,22 @@
 Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
 Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, press Enter to output your selection - either as complete JSON objects or just specific field values.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+    - [Download Pre-built Binaries](#download-pre-built-binaries)
+    - [Build from Source](#build-from-source)
+- [Usage](#usage)
+    - [Arguments](#arguments)
+    - [Keyboard Controls](#keyboard-controls)
+    - [Examples](#examples)
+- [Development](#development)
+    - [GitHub Actions Workflows](#github-actions-workflows)
+    - [Cross-compilation](#cross-compilation)
+- [TODO](#todo)
+- [License](#license)
+
 ## Features
 
 - Interactive filtering and selection of JSON objects or plain text lines
