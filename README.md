@@ -1,6 +1,6 @@
 # qjp
 
-![qjp quick demo](assets/qjp.svg)
+![qjp quick demo](assets/demo2.svg)
 
 `qjp` (quick json picker) is an interactive command-line menu for filtering and selecting JSON objects or plain text lines. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
 
