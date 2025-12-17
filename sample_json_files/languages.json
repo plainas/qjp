@@ -1,0 +1,82 @@
+[
+  {
+    "language": "English",
+    "iso_code": "en"
+  },
+  {
+    "language": "Mandarin Chinese",
+    "iso_code": "zh"
+  },
+  {
+    "language": "Hindi",
+    "iso_code": "hi"
+  },
+  {
+    "language": "Spanish",
+    "iso_code": "es"
+  },
+  {
+    "language": "French",
+    "iso_code": "fr"
+  },
+  {
+    "language": "Arabic",
+    "iso_code": "ar"
+  },
+  {
+    "language": "Bengali",
+    "iso_code": "bn"
+  },
+  {
+    "language": "Portuguese",
+    "iso_code": "pt"
+  },
+  {
+    "language": "Russian",
+    "iso_code": "ru"
+  },
+  {
+    "language": "Urdu",
+    "iso_code": "ur"
+  },
+  {
+    "language": "Indonesian",
+    "iso_code": "id"
+  },
+  {
+    "language": "German",
+    "iso_code": "de"
+  },
+  {
+    "language": "Japanese",
+    "iso_code": "ja"
+  },
+  {
+    "language": "Swahili",
+    "iso_code": "sw"
+  },
+  {
+    "language": "Marathi",
+    "iso_code": "mr"
+  },
+  {
+    "language": "Telugu",
+    "iso_code": "te"
+  },
+  {
+    "language": "Turkish",
+    "iso_code": "tr"
+  },
+  {
+    "language": "Tamil",
+    "iso_code": "ta"
+  },
+  {
+    "language": "Vietnamese",
+    "iso_code": "vi"
+  },
+  {
+    "language": "Korean",
+    "iso_code": "ko"
+  }
+]

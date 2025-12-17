@@ -1,8 +1,10 @@
 # qjp
 
-`qjp` (quick json picker) is an interactive command-line tool for filtering and selecting JSON objects or plain text lines. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
+![qjp quick demo](assets/qjp.svg)
 
-Feed it a JSON array via stdin or from a file (or plain text with `-l`), optionally specify which field(s) to display, and qjp will present an interactive list.
+`qjp` (quick json picker) is an interactive command-line menu for filtering and selecting JSON objects or plain text lines. It provides a quick unix-pipeline friendly way to add an interactive menu to your shellscripts.
+
+Feed it a JSON array via stdin or from a file, optionally specify which field(s) to display, and qjp will present an interactive list.
 Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, press Enter to output your selection - either as complete JSON objects or just specific field values.
 
 ## Table of Contents
@@ -179,7 +181,7 @@ curl -s "https://api.github.com/users/torvalds/repos" | qjp -d name -d descripti
 curl -s "https://www.apicountries.com/countries" | qjp -d name -o alpha2Code
 
 # Minimal lobste.rs reased on your terminal
-curl -s "https://lobste.rs/hottest.json" | ./qjp -d title -o url | xargs lynx
+curl -s "https://lobste.rs/hottest.json" | qjp -d title -o url | xargs lynx
 
 # Get the ID of a docker container by name. Useful to feed into other commands
 docker ps --format json | jq -s '.' | qjp -d Names -d Status -o ID
