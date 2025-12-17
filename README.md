@@ -12,16 +12,17 @@ Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, pr
 - [Features](#features)
 - [Installation](#installation)
     - [Download Pre-built Binaries](#download-pre-built-binaries)
+    - [Quick install scripts](#quick-install-scripts)
+    - [Install the manpage on your system (optional)](#install-the-manpage-on-your-system-optional)
     - [Build from Source](#build-from-source)
 - [Usage](#usage)
     - [Arguments](#arguments)
     - [Keyboard Controls](#keyboard-controls)
-    - [Examples](#examples)
+- [Examples](#examples)
 - [Development](#development)
     - [GitHub Actions Workflows](#github-actions-workflows)
     - [Cross-compilation](#cross-compilation)
 - [TODO](#todo)
-- [License](#license)
 
 ## Features
 
@@ -43,34 +44,34 @@ Type to filter, use arrow keys to navigate, press Ctrl+Space to multi-select, pr
 
 Download the binary directly for your platform from the [Releases](https://github.com/plainas/qjp/releases) page.
 
-#### Quick install scripts
+### Quick install scripts
 ```sh
 # Linux (x86_64)
-sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-x86_64"
+sudo curl -L -o /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-x86_64"
 sudo chmod +x /usr/local/bin/qjp
 
 # Linux (ARM64 / aarch64)
-sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-arm64"
+sudo curl -L -o /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-arm64"
 sudo chmod +x /usr/local/bin/qjp
 
 # Linux (ARMv7)
-sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-armv7"
+sudo curl -L -o /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-linux-armv7"
 sudo chmod +x /usr/local/bin/qjp
 
 # macOS (Intel)
-sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-x86_64"
+sudo curl -L -o /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-x86_64"
 sudo chmod +x /usr/local/bin/qjp
 
 
 # macOS (Apple Silicon)
-sudo wget -O /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-arm64"
+sudo curl -L -o /usr/local/bin/qjp "https://github.com/plainas/qjp/releases/latest/download/qjp-darwin-arm64"
 sudo chmod +x /usr/local/bin/qjp
 ```
 
-#### Install the manpage on your system (optional)
+### Install the manpage on your system (optional)
 
 ```bash
-sudo wget -O /usr/local/share/man/man1/qjp.1 "https://github.com/plainas/qjp/releases/latest/download/qjp.1"
+sudo curl -L -o /usr/local/share/man/man1/qjp.1 "https://github.com/plainas/qjp/releases/latest/download/qjp.1"
 sudo mandb
 ```
 
@@ -109,7 +110,7 @@ man ./qjp.1
 man qjp
 ```
 
-## Keyboard Controls
+### Keyboard Controls
 
 - **Type**: Filter the list in real-time
 - **Up/Down arrows**: Navigate through the list
@@ -197,15 +198,10 @@ curl -s "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=ma
 
 ## Development
 
-### GitHub Actions Workflows
+### Publishing a new release
 
-This project includes GitHub Actions workflows for automated building and releasing:
+To create a new release, create a tag starting with v
 
-1. **CI Workflow** (`.github/workflows/ci.yml`): Runs on every push/PR to test builds on multiple platforms
-2. **Release Workflow** (`.github/workflows/release.yml`): Manual release workflow with custom build matrix
-3. **GoReleaser Workflow** (`.github/workflows/goreleaser.yml`): Automated releases using GoReleaser (recommended)
-
-To create a new release:
 ```bash
 git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin v0.1.0
@@ -228,14 +224,15 @@ GOOS=darwin GOARCH=arm64 go build -o qjp-darwin-arm64
 GOOS=windows GOARCH=amd64 go build -o qjp-windows-amd64.exe
 ```
 
-
-# TODO
+## TODO
 
  * Support jq syntax
  * Add support for jsonlines input
  * Add a classifier to automatically detect input format
  * output as json array
  * add option to output single values as json encoded
+ * write a tutorial
+ * record a more complete screencast
 
 ## License
 
