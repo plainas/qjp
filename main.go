@@ -363,6 +363,90 @@ func (a *App) render() {
 	}
 }
 
+func (a *App) toggleSelection() {
+	if len(a.filtered) > 0 && a.cursor < len(a.filtered) {
+		idx := a.filtered[a.cursor]
+		a.selected[idx] = !a.selected[idx]
+		if a.cursor < len(a.filtered)-1 {
+			a.cursor++
+		}
+	}
+}
+
+func (a *App) getSelection() []int {
+	if len(a.filtered) == 0 || a.cursor >= len(a.filtered) {
+		return nil
+	}
+
+	if len(a.selected) > 0 {
+		result := make([]int, 0, len(a.selected))
+		for idx := range a.selected {
+			result = append(result, idx)
+		}
+		sort.Ints(result)
+		return result
+	}
+
+	return []int{a.filtered[a.cursor]}
+}
+
+func (a *App) handleBackspace() {
+	if len(a.filter) > 0 {
+		a.filter = a.filter[:len(a.filter)-1]
+		a.updateFilter()
+	}
+}
+
+func (a *App) handleCharacter(ch byte) {
+	if ch >= 32 && ch < 127 {
+		a.filter += string(ch)
+		a.updateFilter()
+	}
+}
+
+func (a *App) moveCursorUp() {
+	if a.cursor > 0 {
+		a.cursor--
+	}
+}
+
+func (a *App) moveCursorDown() {
+	if a.cursor < len(a.filtered)-1 {
+		a.cursor++
+	}
+}
+
+func (a *App) handleInput(buf []byte, n int) (done bool, result []int) {
+	if n == 1 {
+		switch buf[0] {
+		case 0: // Ctrl+Space
+			a.toggleSelection()
+			a.render()
+		case 3, 27: // Ctrl+C or ESC
+			return true, nil
+		case 10, 13: // Enter
+			return true, a.getSelection()
+		case 127: // Backspace
+			a.handleBackspace()
+			a.render()
+		default:
+			a.handleCharacter(buf[0])
+			a.render()
+		}
+	} else if n == 3 && buf[0] == 27 && buf[1] == 91 {
+		switch buf[2] {
+		case 65: // Up arrow
+			a.moveCursorUp()
+			a.render()
+		case 66: // Down arrow
+			a.moveCursorDown()
+			a.render()
+		}
+	}
+
+	return false, nil
+}
+
 func (a *App) run() ([]int, error) {
 	ttyFd := a.tty.Fd()
 	oldState, err := setRawMode(ttyFd)
@@ -371,7 +455,6 @@ func (a *App) run() ([]int, error) {
 	}
 	defer restoreTerminal(ttyFd, oldState)
 
-	// Use alternate screen buffer
 	fmt.Fprint(a.tty, altScreenOn+hideCursor)
 	defer fmt.Fprint(a.tty, showCursor+altScreenOff)
 
@@ -384,60 +467,8 @@ func (a *App) run() ([]int, error) {
 			return nil, err
 		}
 
-		if n == 1 {
-			switch buf[0] {
-			case 0: // Ctrl+Space
-				if len(a.filtered) > 0 && a.cursor < len(a.filtered) {
-					idx := a.filtered[a.cursor]
-					a.selected[idx] = !a.selected[idx]
-					// Move cursor down after toggling
-					if a.cursor < len(a.filtered)-1 {
-						a.cursor++
-					}
-					a.render()
-				}
-			case 3, 27: // Ctrl+C or ESC
-				return nil, nil
-			case 10, 13: // Enter (newline or carriage return)
-				if len(a.filtered) > 0 && a.cursor < len(a.filtered) {
-					// Return selected items if any, otherwise just the cursor item
-					if len(a.selected) > 0 {
-						result := []int{}
-						for idx := range a.selected {
-							result = append(result, idx)
-						}
-						sort.Ints(result) // Sort for consistent order
-						return result, nil
-					}
-					return []int{a.filtered[a.cursor]}, nil
-				}
-			case 127: // Backspace
-				if len(a.filter) > 0 {
-					a.filter = a.filter[:len(a.filter)-1]
-					a.updateFilter()
-					a.render()
-				}
-			default:
-				if buf[0] >= 32 && buf[0] < 127 {
-					a.filter += string(buf[0])
-					a.updateFilter()
-					a.render()
-				}
-			}
-		} else if n == 3 && buf[0] == 27 && buf[1] == 91 {
-			// Arrow keys
-			switch buf[2] {
-			case 65: // Up
-				if a.cursor > 0 {
-					a.cursor--
-					a.render()
-				}
-			case 66: // Down
-				if a.cursor < len(a.filtered)-1 {
-					a.cursor++
-					a.render()
-				}
-			}
+		if done, result := a.handleInput(buf, n); done {
+			return result, nil
 		}
 	}
 }
@@ -456,7 +487,18 @@ func min(a, b int) int {
 	return b
 }
 
-func output_usage_message_to_stderr() {
+type config struct {
+	outputAttr   string
+	displayAttrs []string
+	truncate     bool
+	tableMode    bool
+	lineMode     bool
+	allAttrs     bool
+	filename     string
+	separator    string
+}
+
+func outputUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: qjp [filename] [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] [-a]")
 	fmt.Fprintln(os.Stderr, "       qjp [-d display-attribute] [-o output-attribute] [-s separator] [-t] [-T] [-l] [-a] < input")
 	fmt.Fprintln(os.Stderr, "")
@@ -484,219 +526,238 @@ func output_usage_message_to_stderr() {
 	fmt.Fprintln(os.Stderr, "  cat file.txt | qjp -l")
 }
 
-func main() {
-	// Manual parsing to support flags after positional arguments
-	var outputAttr string
-	var displayAttrs []string
-	var truncate bool
-	var tableMode bool
-	var lineMode bool
-	var allAttrs bool
-	var filename string
-	var separator string = " - " // Default separator
+func parseArgs() config {
+	cfg := config{
+		separator: " - ",
+	}
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
-		if args[i] == "-d" && i+1 < len(args) {
-			displayAttrs = append(displayAttrs, args[i+1])
-			i++ // skip the next arg
-		} else if args[i] == "-o" && i+1 < len(args) {
-			outputAttr = args[i+1]
-			i++ // skip the next arg
-		} else if args[i] == "-s" && i+1 < len(args) {
-			separator = args[i+1]
-			i++ // skip the next arg
-		} else if args[i] == "-t" {
-			truncate = true
-		} else if args[i] == "-T" {
-			tableMode = true
-		} else if args[i] == "-l" {
-			lineMode = true
-		} else if args[i] == "-a" {
-			allAttrs = true
-		} else if args[i] == "-h" || args[i] == "--help" {
-			output_usage_message_to_stderr()
+		switch args[i] {
+		case "-d":
+			if i+1 < len(args) {
+				cfg.displayAttrs = append(cfg.displayAttrs, args[i+1])
+				i++
+			}
+		case "-o":
+			if i+1 < len(args) {
+				cfg.outputAttr = args[i+1]
+				i++
+			}
+		case "-s":
+			if i+1 < len(args) {
+				cfg.separator = args[i+1]
+				i++
+			}
+		case "-t":
+			cfg.truncate = true
+		case "-T":
+			cfg.tableMode = true
+		case "-l":
+			cfg.lineMode = true
+		case "-a":
+			cfg.allAttrs = true
+		case "-h", "--help":
+			outputUsage()
 			os.Exit(0)
-		} else if !strings.HasPrefix(args[i], "-") {
-			filename = args[i]
+		default:
+			if !strings.HasPrefix(args[i], "-") {
+				cfg.filename = args[i]
+			}
 		}
 	}
 
-	// Validate flag combinations
-	if allAttrs && len(displayAttrs) > 0 {
-		fmt.Fprintln(os.Stderr, "Error: Cannot use both -a and -d")
-		os.Exit(1)
+	return cfg
+}
+
+func validateConfig(cfg config) error {
+	if cfg.allAttrs && len(cfg.displayAttrs) > 0 {
+		return fmt.Errorf("cannot use both -a and -d")
 	}
 
-	if lineMode {
-		if len(displayAttrs) > 0 {
-			fmt.Fprintln(os.Stderr, "Error: Cannot use -d in line mode")
-			os.Exit(1)
+	if cfg.lineMode {
+		if len(cfg.displayAttrs) > 0 {
+			return fmt.Errorf("cannot use -d in line mode")
 		}
-		if allAttrs {
-			fmt.Fprintln(os.Stderr, "Error: Cannot use -a in line mode")
-			os.Exit(1)
+		if cfg.allAttrs {
+			return fmt.Errorf("cannot use -a in line mode")
 		}
-		if outputAttr != "" {
-			fmt.Fprintln(os.Stderr, "Error: Cannot use -o in line mode")
-			os.Exit(1)
+		if cfg.outputAttr != "" {
+			return fmt.Errorf("cannot use -o in line mode")
 		}
-		if separator != " - " {
-			fmt.Fprintln(os.Stderr, "Error: Cannot use -s in line mode")
-			os.Exit(1)
+		if cfg.separator != " - " {
+			return fmt.Errorf("cannot use -s in line mode")
 		}
-		if truncate {
-			fmt.Fprintln(os.Stderr, "Error: Cannot use -t in line mode")
-			os.Exit(1)
+		if cfg.truncate {
+			return fmt.Errorf("cannot use -t in line mode")
 		}
-		if tableMode {
-			fmt.Fprintln(os.Stderr, "Error: Cannot use -T in line mode")
-			os.Exit(1)
+		if cfg.tableMode {
+			return fmt.Errorf("cannot use -T in line mode")
 		}
 	}
 
-	// displayAttrs is optional - if not provided, display whole object
+	return nil
+}
 
-	// Check if stdin has data
+func readInput(filename string) ([]byte, error) {
 	stdinStat, _ := os.Stdin.Stat()
 	hasStdin := (stdinStat.Mode() & os.ModeCharDevice) == 0
 
-	// Error if both stdin and filename are provided
 	if hasStdin && filename != "" {
-		fmt.Fprintln(os.Stderr, "Error: Cannot use both stdin and filename input. Provide only one.")
-		os.Exit(1)
+		return nil, fmt.Errorf("cannot use both stdin and filename input")
 	}
 
-	// Error if neither stdin nor filename are provided
 	if !hasStdin && filename == "" {
-		fmt.Fprintln(os.Stderr, "Error: No input provided. Use stdin or provide a filename.")
-		output_usage_message_to_stderr()
-		os.Exit(1)
+		return nil, fmt.Errorf("no input provided")
 	}
-
-	// Read input from stdin or file
-	var input []byte
-	var err error
 
 	if filename != "" {
-		input, err = os.ReadFile(filename)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading file '%s': %v\n", filename, err)
-			os.Exit(1)
-		}
-	} else {
-		input, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
-			os.Exit(1)
-		}
+		return os.ReadFile(filename)
 	}
 
+	return io.ReadAll(os.Stdin)
+}
+
+func parseObjects(input []byte, lineMode bool) ([]map[string]interface{}, error) {
 	var objects []map[string]interface{}
 
 	if lineMode {
-		// Line mode: read input as lines
 		scanner := bufio.NewScanner(bytes.NewReader(input))
 		for scanner.Scan() {
-			line := scanner.Text()
 			objects = append(objects, map[string]interface{}{
-				"line": line,
+				"line": scanner.Text(),
 			})
 		}
 		if err := scanner.Err(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading lines: %v\n", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error reading lines: %w", err)
 		}
-
-		// Force line mode settings
-		displayAttrs = []string{"line"}
-		outputAttr = "line"
 	} else {
-		// JSON mode: parse as JSON array
 		if err := json.Unmarshal(input, &objects); err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing JSON: %v\n", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error parsing JSON: %w", err)
 		}
 	}
 
 	if len(objects) == 0 {
-		fmt.Fprintln(os.Stderr, "No objects found in input")
-		os.Exit(1)
+		return nil, fmt.Errorf("no objects found in input")
 	}
 
-	// If -a flag is set, collect all attributes from all objects
-	if allAttrs {
-		attrMap := make(map[string]bool)
-		for _, obj := range objects {
-			for key := range obj {
-				attrMap[key] = true
+	return objects, nil
+}
+
+func getAllAttributes(objects []map[string]interface{}) []string {
+	attrMap := make(map[string]bool)
+	for _, obj := range objects {
+		for key := range obj {
+			attrMap[key] = true
+		}
+	}
+
+	attrs := make([]string, 0, len(attrMap))
+	for key := range attrMap {
+		attrs = append(attrs, key)
+	}
+	sort.Strings(attrs)
+
+	return attrs
+}
+
+func formatOutputValue(val interface{}) (string, error) {
+	switch v := val.(type) {
+	case float64:
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v)), nil
+		}
+		return fmt.Sprintf("%v", v), nil
+	case string:
+		return v, nil
+	case []interface{}, map[string]interface{}:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("error marshaling output: %w", err)
+		}
+		return string(jsonBytes), nil
+	default:
+		return fmt.Sprintf("%v", v), nil
+	}
+}
+
+func outputSelectedObjects(objects []map[string]interface{}, indices []int, outputAttr string) error {
+	for _, idx := range indices {
+		selectedObj := objects[idx]
+
+		if outputAttr != "" {
+			val, ok := selectedObj[outputAttr]
+			if !ok {
+				return fmt.Errorf("attribute '%s' not found in selected object", outputAttr)
 			}
+
+			formatted, err := formatOutputValue(val)
+			if err != nil {
+				return err
+			}
+			fmt.Println(formatted)
+		} else {
+			jsonBytes, err := json.Marshal(selectedObj)
+			if err != nil {
+				return fmt.Errorf("error marshaling output: %w", err)
+			}
+			fmt.Println(string(jsonBytes))
 		}
-		// Convert map to sorted slice for consistent order
-		displayAttrs = make([]string, 0, len(attrMap))
-		for key := range attrMap {
-			displayAttrs = append(displayAttrs, key)
-		}
-		sort.Strings(displayAttrs)
 	}
 
-	// Open /dev/tty for interactive input/output
+	return nil
+}
+
+func fatalError(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "Error: "+format+"\n", args...)
+	os.Exit(1)
+}
+
+func main() {
+	cfg := parseArgs()
+
+	if err := validateConfig(cfg); err != nil {
+		fatalError(err.Error())
+	}
+
+	input, err := readInput(cfg.filename)
+	if err != nil {
+		if err.Error() == "no input provided" {
+			outputUsage()
+		}
+		fatalError(err.Error())
+	}
+
+	objects, err := parseObjects(input, cfg.lineMode)
+	if err != nil {
+		fatalError(err.Error())
+	}
+
+	displayAttrs := cfg.displayAttrs
+	outputAttr := cfg.outputAttr
+
+	if cfg.lineMode {
+		displayAttrs = []string{"line"}
+		outputAttr = "line"
+	} else if cfg.allAttrs {
+		displayAttrs = getAllAttributes(objects)
+	}
+
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening /dev/tty: %v\n", err)
-		os.Exit(1)
+		fatalError("opening /dev/tty: %v", err)
 	}
 	defer tty.Close()
 
-	app := newApp(objects, displayAttrs, outputAttr, tty, truncate, tableMode, separator)
+	app := newApp(objects, displayAttrs, outputAttr, tty, cfg.truncate, cfg.tableMode, cfg.separator)
 	selectedIndices, err := app.run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		fatalError("%v", err)
 	}
 
 	if len(selectedIndices) > 0 {
-		for _, idx := range selectedIndices {
-			selectedObj := app.objects[idx]
-
-			if outputAttr != "" {
-				// Output specific attribute
-				if val, ok := selectedObj[outputAttr]; ok {
-					// Format output based on type
-					switch v := val.(type) {
-					case float64:
-						// Check if it's actually an integer
-						if v == float64(int64(v)) {
-							fmt.Println(int64(v))
-						} else {
-							fmt.Println(v)
-						}
-					case string:
-						fmt.Println(v)
-					case []interface{}, map[string]interface{}:
-						// Output arrays and objects as single-line JSON
-						jsonBytes, err := json.Marshal(v)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Error marshaling output: %v\n", err)
-							os.Exit(1)
-						}
-						fmt.Println(string(jsonBytes))
-					default:
-						fmt.Println(v)
-					}
-				} else {
-					fmt.Fprintf(os.Stderr, "Attribute '%s' not found in selected object\n", outputAttr)
-					os.Exit(1)
-				}
-			} else {
-				// Output entire object on one line
-				jsonBytes, err := json.Marshal(selectedObj)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error marshaling output: %v\n", err)
-					os.Exit(1)
-				}
-				fmt.Println(string(jsonBytes))
-			}
+		if err := outputSelectedObjects(app.objects, selectedIndices, outputAttr); err != nil {
+			fatalError("%v", err)
 		}
 	}
 }
